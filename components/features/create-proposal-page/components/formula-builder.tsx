@@ -14,10 +14,20 @@ import {
 import { VariableResponse } from "@/types/variables/dto";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
-import { getAllVariables } from "@/api-calls/variables/get-all-variables";
 import { FormulaToken } from "../hooks/use-formula";
 import { getVariables } from "@/query-options/variables";
 import { getProducts } from "@/query-options/products";
+
+// Define interfaces for type safety
+interface SuggestionItem {
+  id: string;
+  name?: string;
+  title?: string;
+  isProduct?: boolean;
+  isCreateSuggestion?: boolean;
+  displayText?: string;
+  is_global?: boolean;
+}
 
 interface FormulaBuilderProps {
   formulaTokens: FormulaToken[];
@@ -27,7 +37,7 @@ interface FormulaBuilderProps {
   hasError?: boolean;
   onCreateVariable?: (name: string, formulaType?: "material" | "labor") => void;
   formulaType?: "material" | "labor";
-  onValidationError?: (error: string | null) => void; // NEW
+  onValidationError?: (error: string | null) => void;
 }
 
 // Function to validate a mathematical formula
@@ -160,6 +170,12 @@ export function FormulaBuilder({
   // Track if this component is currently focused
   const [isFocused, setIsFocused] = useState(false);
 
+  // Store pending variable information to be processed after creation
+  const pendingVariableRef = useRef<{
+    name: string;
+    formulaType: "material" | "labor" | null;
+  } | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: variablesData, isLoading: variablesLoading } = useQuery(
@@ -177,21 +193,25 @@ export function FormulaBuilder({
         variable && (variable.is_global || variable.origin === "derived")
     );
   }, [variables]);
-
   // Ensure formulaTokens is always an array of valid tokens
   const validFormulaTokens = useMemo(() => {
     if (!Array.isArray(formulaTokens)) return [];
 
-    return formulaTokens.filter(
-      (token) =>
-        token &&
-        typeof token === "object" &&
-        token.id !== undefined &&
-        token.text !== undefined &&
-        token.type !== undefined
-    );
+    return formulaTokens
+      .filter(
+        (token) =>
+          token &&
+          typeof token === "object" &&
+          token.id !== undefined &&
+          token.text !== undefined &&
+          token.type !== undefined
+      )
+      .map((token) => ({
+        ...token,
+        // Ensure displayText is always present, fallback to text if missing
+        displayText: token.displayText !== undefined ? token.displayText : token.text
+      }));
   }, [formulaTokens]);
-
   const addFormulaToken = (
     text: string,
     displayText: string,
@@ -203,6 +223,15 @@ export function FormulaBuilder({
       displayText,
       type: tokenType,
     };
+
+    // Log newly created variable tokens
+    if (tokenType === "variable") {
+      console.log("New variable token created:", {
+        token: newToken,
+        formulaType,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Always append the token at the end for now
     const updatedTokens = [...validFormulaTokens, newToken];
@@ -241,6 +270,18 @@ export function FormulaBuilder({
       if (onCreateVariable && !isCreatingVariable) {
         setIsCreatingVariable(true);
 
+        // Store the pending variable information
+        pendingVariableRef.current = {
+          name: name.trim(),
+          formulaType: formulaType || null,
+        };
+
+        console.log("Requesting variable creation:", {
+          name: name.trim(),
+          formulaType,
+          timestamp: new Date().toISOString()
+        });
+
         // Pass the formula type to indicate which formula should get the new variable
         onCreateVariable(name, formulaType);
 
@@ -251,6 +292,7 @@ export function FormulaBuilder({
     } catch (error) {
       console.error("Error calling onCreateVariable:", error);
       setIsCreatingVariable(false);
+      pendingVariableRef.current = null;
     }
     return false;
   };
@@ -270,69 +312,88 @@ export function FormulaBuilder({
         return;
       }
 
-      if (suggestions.length > 0) {
-        const selectedItem = suggestions[selectedSuggestion];
-        const isProduct = "isProduct" in selectedItem && selectedItem.isProduct;
+      // ENTER behavior: Create new items when no exact match exists
+      if (formulaInput.trim()) {
+        const hasExactMatch = suggestions.some((item) => {
+          const isProduct = "isProduct" in item && item.isProduct;
+          const isCreateSuggestion = "isCreateSuggestion" in item && item.isCreateSuggestion;
+          
+          if (isCreateSuggestion) return false;
+          
+          const itemName = isProduct ? item.title : item.name;
+          return itemName.toLowerCase() === formulaInput.trim().toLowerCase();
+        });
 
-        if (isProduct) {
-          // Handle product selection
-          addFormulaToken(selectedItem.id, selectedItem.title, "product");
-          return;
-        }
+        if (hasExactMatch) {
+          // Select the exact match
+          const exactMatch = suggestions.find((item) => {
+            const isProduct = "isProduct" in item && item.isProduct;
+            const isCreateSuggestion = "isCreateSuggestion" in item && item.isCreateSuggestion;
+            
+            if (isCreateSuggestion) return false;
+            
+            const itemName = isProduct ? item.title : item.name;
+            return itemName.toLowerCase() === formulaInput.trim().toLowerCase();
+          });
+          
+          if (exactMatch) {
+            const isProduct = "isProduct" in exactMatch && exactMatch.isProduct;
+            
+            if (isProduct) {
+              addFormulaToken(exactMatch.id, exactMatch.title, "product");
+            } else {
+              // Add variable to template if not already present
+              if (updateVariables && !variables.some((v) => v.id === exactMatch.id)) {
+                updateVariables((currentVariables) => {
+                  if (currentVariables.some((v) => v.id === exactMatch.id)) {
+                    return currentVariables;
+                  }
+                  return [...currentVariables, exactMatch];
+                });
 
-        // Handle variable selection (existing code)
-        if (
-          updateVariables &&
-          !variables.some((v) => v.id === selectedItem.id)
-        ) {
-          updateVariables((currentVariables) => {
-            if (currentVariables.some((v) => v.id === selectedItem.id)) {
-              return currentVariables;
+                toast.success("Variable automatically added", {
+                  description: `"${exactMatch.name}" has been added to your proposal.`,
+                });
+              }
+              addFormulaToken(exactMatch.name, exactMatch.name, "variable");
             }
-            return [...currentVariables, selectedItem];
-          });
-
-          toast.success("Variable automatically added", {
-            description: `"${selectedItem.name}" has been added to your template.`,
-          });
-        }
-        addFormulaToken(selectedItem.name, selectedItem.name, "variable");
-      } else if (
-        formulaInput.trim() &&
-        !variables.some(
-          (v) => v.name.toLowerCase() === formulaInput.toLowerCase()
-        )
-      ) {
-        safeCreateVariable(formulaInput.trim());
-      } else if (formulaInput.trim()) {
-        const exactMatch = variables.find(
-          (v) => v.name.toLowerCase() === formulaInput.trim().toLowerCase()
-        );
-        if (exactMatch) {
-          addFormulaToken(exactMatch.name, exactMatch.name, "variable");
+          }
+        } else {
+          // No exact match - create new variable
+          safeCreateVariable(formulaInput.trim());
         }
       }
     } else if (e.key === "Tab" && suggestions.length > 0) {
       e.preventDefault();
+      
+      // TAB behavior: Import first suggestion/exact match
       const selectedItem = suggestions[selectedSuggestion];
-
       const isProduct = "isProduct" in selectedItem && selectedItem.isProduct;
-      console.log("isProduct", isProduct);
-      console.log("selectedItem", selectedItem);
+      const isCreateSuggestion = "isCreateSuggestion" in selectedItem && selectedItem.isCreateSuggestion;
 
-      if (isProduct) {
-        // Handle product selection
-        // Add "product:" prefix to the displayText for better identification
-        addFormulaToken(selectedItem.id, `product:${selectedItem.title}`, "product");
-        
+      if (isCreateSuggestion) {
+        // Handle create variable suggestion
+        safeCreateVariable(selectedItem.name);
         return;
       }
 
-      // Handle variable selection
+      if (isProduct) {
+        // Handle product selection
+        addFormulaToken(selectedItem.id, selectedItem.title, "product");
+        return;
+      }
+
+      // Handle variable selection - prevent duplicates in template
       if (updateVariables && !variables.some((v) => v.id === selectedItem.id)) {
-        updateVariables([...variables, selectedItem]);
+        updateVariables((currentVariables) => {
+          if (currentVariables.some((v) => v.id === selectedItem.id)) {
+            return currentVariables;
+          }
+          return [...currentVariables, selectedItem];
+        });
+
         toast.success("Variable automatically added", {
-          description: `"${selectedItem.name}" has been added to your template.`,
+          description: `"${selectedItem.name}" has been added to your proposal.`,
         });
       }
       addFormulaToken(selectedItem.name, selectedItem.name, "variable");
@@ -363,8 +424,6 @@ export function FormulaBuilder({
       setShowSuggestions(false);
       return;
     }
-
-
 
     let templateMatches = templateVariables.filter(
       (v) =>
@@ -412,12 +471,42 @@ export function FormulaBuilder({
       }));
     }
 
-    setSuggestions([
+    // Only show "add as variable" suggestion if:
+    // 1. Input is not a number
+    // 2. Input is not an operator
+    // 3. Input doesn't exactly match an existing variable
+    // 4. Input has at least 2 characters
+    const shouldShowCreateSuggestion =
+      formulaInput.trim().length >= 2 &&
+      isNaN(parseFloat(formulaInput)) &&
+      !["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim()) &&
+      !variables.some(v => v.name.toLowerCase() === formulaInput.trim().toLowerCase()) &&
+      !validFormulaTokens.some(token =>
+        token.type === "variable" &&
+        token.text.toLowerCase() === formulaInput.trim().toLowerCase()
+      );
+
+    const suggestions = [];
+
+    // Add "create variable" suggestion first if applicable
+    if (shouldShowCreateSuggestion) {
+      suggestions.push({
+        id: `create-${formulaInput}`,
+        name: formulaInput.trim(),
+        displayText: `Add "${formulaInput.trim()}" as variable`,
+        isCreateSuggestion: true,
+      });
+    }
+
+    // Add other suggestions
+    suggestions.push(
       ...templateMatches,
       ...apiMatches.filter((v) => v.is_global),
       ...apiMatches.filter((v) => !v.is_global),
-      ...productMatches,
-    ]);
+      ...productMatches
+    );
+
+    setSuggestions(suggestions);
 
     setShowSuggestions(true);
     setSelectedSuggestion(0);
@@ -438,33 +527,63 @@ export function FormulaBuilder({
     setIsCreatingVariable(false);
   }, [validFormulaTokens]);
 
+  // Handle pending variable addition after creation
+  useEffect(() => {
+    if (!pendingVariableRef.current) return;
+
+    const pendingVariable = pendingVariableRef.current;
+
+    // Look for a newly created variable that matches the pending name
+    const newVariable = variables.find(variable =>
+      variable.name.toLowerCase() === pendingVariable.name.toLowerCase() &&
+      // Only add if it's not already in the formula
+      !validFormulaTokens.some(token =>
+        token.type === "variable" &&
+        token.text.toLowerCase() === variable.name.toLowerCase()
+      )
+    );
+
+    if (newVariable) {
+      console.log("Adding newly created variable to formula:", {
+        variableName: newVariable.name,
+        formulaType: pendingVariable.formulaType,
+        timestamp: new Date().toISOString()
+      });
+
+      // Add the variable token to the formula
+      addFormulaToken(newVariable.name, newVariable.name, "variable");
+
+      // Clear the pending variable
+      pendingVariableRef.current = null;
+      setIsCreatingVariable(false);
+    }
+  }, [variables, validFormulaTokens]);
+
   return (
     <>
       <div
-        className={`border rounded-lg p-3 flex flex-wrap gap-2 min-h-[65px] bg-background/50 relative transition-all ${
-          hasError || validationError
-            ? "border-red-300 bg-red-50/50"
-            : isFormulaValid && validFormulaTokens.length > 0
+        className={`border rounded-lg p-3 flex flex-wrap gap-2 min-h-[65px] bg-background/50 relative transition-all ${hasError || validationError
+          ? "border-red-300 bg-red-50/50"
+          : isFormulaValid && validFormulaTokens.length > 0
             ? "border-green-300 bg-green-50/50"
             : "hover:border-primary/30 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20"
-        }`}
+          }`}
         onClick={() => inputRef.current?.focus()}
       >
         {validFormulaTokens.map((token) => (
           <Badge
             key={token.id}
             variant="outline"
-            className={`gap-1.5 px-2 py-1 text-sm rounded-md transition-all duration-150 hover:shadow cursor-text ${
-              token.type === "variable"
-                ? "bg-gradient-to-r from-primary/5 to-primary/10 text-primary border-primary/20 shadow-sm"
-                : token.type === "operator"
+            className={`gap-1.5 px-2 py-1 text-sm rounded-md transition-all duration-150 hover:shadow cursor-text ${token.type === "variable"
+              ? "bg-gradient-to-r from-primary/5 to-primary/10 text-primary border-primary/20 shadow-sm"
+              : token.type === "operator"
                 ? "bg-gradient-to-r from-amber-500/5 to-amber-500/10 text-amber-700 border-amber-500/20 shadow-sm"
                 : token.type === "number"
-                ? "bg-gradient-to-r from-blue-500/5 to-blue-500/10 text-blue-700 border-blue-500/20 shadow-sm"
-                : token.type === "product"
-                ? "bg-gradient-to-r from-green-500/5 to-green-500/10 text-green-700 border-green-500/20 shadow-sm"
-                : "bg-gray-100 text-gray-800 shadow-sm"
-            }`}
+                  ? "bg-gradient-to-r from-blue-500/5 to-blue-500/10 text-blue-700 border-blue-500/20 shadow-sm"
+                  : token.type === "product"
+                    ? "bg-gradient-to-r from-green-500/5 to-green-500/10 text-green-700 border-green-500/20 shadow-sm"
+                    : "bg-gray-100 text-gray-800 shadow-sm"
+              }`}
           >
             {token.type === "variable" ? (
               <Variable className="w-3 h-3 mr-1" />
@@ -545,7 +664,16 @@ export function FormulaBuilder({
               suggestions.map((item, index) => {
                 // Check if this is a product
                 const isProduct = "isProduct" in item && item.isProduct;
-                const displayName = isProduct ? item.title : item.name;
+                // Check if this is a "create variable" suggestion
+                const isCreateSuggestion = "isCreateSuggestion" in item && item.isCreateSuggestion;
+
+                const displayName = isProduct ? item.title :
+                  isCreateSuggestion ? item.displayText :
+                    item.name;
+                    
+                // Check if this item is an exact match
+                const isExactMatch = !isCreateSuggestion && 
+                  displayName.toLowerCase() === formulaInput.trim().toLowerCase();
 
                 return (
                   <div
@@ -556,41 +684,97 @@ export function FormulaBuilder({
                         : ""
                     }`}
                     onClick={() => {
-                      if (isProduct) {
+                      if (isCreateSuggestion) {
+                        safeCreateVariable(item.name);
+                      } else if (isProduct) {
+                        // Handle product selection
                         addFormulaToken(item.id, item.title, "product");
                       } else {
+                        // Handle existing variable selection
+                        if (updateVariables && !variables.some((v) => v.id === item.id)) {
+                          updateVariables((currentVariables) => {
+                            if (currentVariables.some((v) => v.id === item.id)) {
+                              return currentVariables;
+                            }
+                            return [...currentVariables, item];
+                          });
+
+                          toast.success("Variable automatically added", {
+                            description: `"${item.name}" has been added to your proposal.`,
+                          });
+                        }
                         addFormulaToken(item.name, item.name, "variable");
                       }
                     }}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        {isProduct ? (
-                          <Package className="w-3.5 h-3.5 text-green-600" />
-                        ) : (
-                          <Variable className="w-3.5 h-3.5 text-primary" />
-                        )}
-                        {displayName}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {!isProduct &&
-                          !templateVariables.some((v) => v.id === item.id) && (
-                            <Badge variant="outline" className="ml-2 text-xs">
-                              Will add to template
+                    <div className="flex flex-col">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          {isCreateSuggestion ? (
+                            <PlusCircle className="w-3.5 h-3.5 text-blue-600" />
+                          ) : isProduct ? (
+                            <Package className="w-3.5 h-3.5 text-green-600" />
+                          ) : (
+                            <Variable className="w-3.5 h-3.5 text-primary" />
+                          )}
+                          {displayName}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {isCreateSuggestion && (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-blue-100 text-blue-700 border-blue-200"
+                            >
+                              Create
                             </Badge>
                           )}
-                        {!isProduct && item.is_global && (
-                          <Badge variant="secondary" className="text-xs">
-                            Global
-                          </Badge>
+                          {!isProduct && !isCreateSuggestion &&
+                            !templateVariables.some((v) => v.id === item.id) && (
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                Will add to proposal
+                              </Badge>
+                            )}
+                          {!isProduct && !isCreateSuggestion && item.is_global && (
+                            <Badge variant="secondary" className="text-xs">
+                              Global
+                            </Badge>
+                          )}
+                          {isProduct && (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-green-100 text-green-700 border-green-200"
+                            >
+                              Product
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      {!isProduct && !isCreateSuggestion && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {isExactMatch ? (
+                            <span className="text-xs text-green-600">Exact match</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {displayName.toLowerCase().startsWith(formulaInput.toLowerCase()) 
+                                ? `Similar to "${formulaInput}"` 
+                                : `Contains "${formulaInput}"`}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
+                        <span className="px-1.5 py-0.5 bg-muted/50 rounded">
+                          Press <span className="font-medium">Tab</span> to add
+                        </span>
+                        {isExactMatch && (
+                          <span className="px-1.5 py-0.5 bg-muted/50 rounded">
+                            Press <span className="font-medium">Enter</span> to select
+                          </span>
                         )}
-                        {isProduct && (
-                          <Badge
-                            variant="secondary"
-                            className="text-xs bg-green-100 text-green-700 border-green-200"
-                          >
-                            Product
-                          </Badge>
+                        {isCreateSuggestion && (
+                          <span className="px-1.5 py-0.5 bg-muted/50 rounded">
+                            Press <span className="font-medium">Enter</span> to create
+                          </span>
                         )}
                       </div>
                     </div>
@@ -631,8 +815,8 @@ export function FormulaBuilder({
                   </div>
                 </div>
               ) : ["+", "-", "*", "/", "(", ")", "^"].includes(
-                  formulaInput.trim()
-                ) ? (
+                formulaInput.trim()
+              ) ? (
                 <div
                   className="p-3 cursor-pointer hover:bg-accent"
                   onClick={() =>
@@ -653,33 +837,32 @@ export function FormulaBuilder({
                   </div>
                 </div>
               ) : variables.some(
-                  (v) =>
-                    v.name.toLowerCase() === formulaInput.trim().toLowerCase()
-                ) ? (
+                (v) =>
+                  v.name.toLowerCase() === formulaInput.trim().toLowerCase()
+              ) ? (
                 <div
                   className="p-3 cursor-pointer hover:bg-accent"
-                  onClick={() =>
-                    addFormulaToken(
-                      variables.find(
-                        (v) =>
-                          v.name.toLowerCase() ===
-                          formulaInput.trim().toLowerCase()
-                      )?.name || formulaInput.trim(),
-                      variables.find(
-                        (v) =>
-                          v.name.toLowerCase() ===
-                          formulaInput.trim().toLowerCase()
-                      )?.name || formulaInput.trim(),
-                      "variable"
-                    )
-                  }
+                  onClick={() => {
+                    const exactMatch = variables.find(
+                      (v) =>
+                        v.name.toLowerCase() ===
+                        formulaInput.trim().toLowerCase()
+                    );
+                    if (exactMatch) {
+                      addFormulaToken(
+                        exactMatch.name,
+                        exactMatch.name,
+                        "variable"
+                      );
+                    }
+                  }}
                 >
                   <div className="flex-1">
                     <span className="font-medium text-sm">
                       Use "{formulaInput.trim()}"
                     </span>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Press Enter to use this variable
+                      Press Enter to use this existing variable
                     </p>
                   </div>
                 </div>
@@ -690,14 +873,10 @@ export function FormulaBuilder({
                 >
                   <div className="flex-1">
                     <span className="font-medium text-sm">
-                      "{formulaInput.trim()}"
-                    </span>
-                    <span className="text-muted-foreground text-sm">
-                      {" "}
-                      doesn't exist
+                      Create new variable "{formulaInput.trim()}"
                     </span>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Click to create this variable and add to formula
+                      Press Enter to create this variable and add to formula
                     </p>
                   </div>
                   <PlusCircle className="h-4 w-4 text-muted-foreground ml-2" />

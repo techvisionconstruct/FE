@@ -793,6 +793,12 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
     (contract?.client_initials && contract?.client_initials.trim() !== "")
   );
 
+  // Check if contractor signature is already signed
+  const isContractorSigned = !!(
+    contract?.contractor_signature ||
+    (contract?.contractor_initials && contract?.contractor_initials.trim() !== "")
+  );
+
   // Update contract mutation
   const updateContractMutation = useMutation({
     mutationFn: ({
@@ -1307,6 +1313,15 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
     }
   };
 
+  // Add formatDate function if not already present
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "2-digit",
+      day: "2-digit",
+      year: "numeric",
+    });
+  };
+
   // Add check for proposal template data AFTER all hooks
   if (!proposal || !proposal.template || isContractLoading) {
     return (
@@ -1457,8 +1472,8 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                               ? new Date(
                                   proposal.created_at
                                 ).toLocaleDateString("en-US", {
-                                  month: "long",
-                                  day: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
                                   year: "numeric",
                                 })
                               : "N/A"}
@@ -1471,8 +1486,8 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                               ? new Date(
                                   proposal.updated_at
                                 ).toLocaleDateString("en-US", {
-                                  month: "long",
-                                  day: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
                                   year: "numeric",
                                 })
                               : "N/A"}
@@ -1615,12 +1630,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                                                 ) +
                                                   parseFloat(
                                                     element.labor_cost || 0
-                                                  )) *
-                                                  (1 +
-                                                    parseFloat(
-                                                      element.markup || 0
-                                                    ) /
-                                                      100)
+                                                  )) 
                                               )}
                                             </span>
                                           </div>
@@ -1740,7 +1750,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                     <h3 className="text-lg font-semibold">
                       Contractor Signature
                     </h3>
-                    {isEditing ? (
+                    {isEditing && !isContractorSigned ? (
                       <div className="border rounded-lg p-4 bg-muted/10">
                         <div className="flex gap-4 mb-3">
                           <div className="flex items-center space-x-2">
@@ -1782,16 +1792,18 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                               id="contractorInitials"
                               name="contractorInitials"
                               value={signatures.contractor.value}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                // Prevent spaces in initials
+                                const value = e.target.value.replace(/\s/g, '');
                                 setSignatures((prev) => ({
                                   ...prev,
                                   contractor: {
                                     ...prev.contractor,
-                                    value: e.target.value,
+                                    value: value,
                                   },
-                                }))
-                              }
-                              placeholder="Type your initials"
+                                }));
+                              }}
+                              placeholder="Type your initials (no spaces)"
                               className="font-medium border-blue-500 shadow-sm ring-2 ring-blue-300 bg-blue-50/50 focus:border-blue-600 focus:ring-2 focus:ring-blue-400 transition-all"
                             />
                             {signatures.contractor.value && (
@@ -1845,13 +1857,15 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                           )
                         ) : (
                           <p className="text-muted-foreground">
-                            Signature required
+                            {isContractorSigned ? "Signed" : "Signature required"}
                           </p>
                         )}
                       </div>
                     )}
                     <p className="text-sm text-muted-foreground">
-                      Date: {contract?.contractor_signed_at || "N/A"}
+                      Date: {contract?.contractor_signed_at 
+                        ? formatDate(contract.contractor_signed_at)
+                        : "N/A"}
                     </p>
                   </div>
                 </div>

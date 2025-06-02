@@ -25,7 +25,8 @@ import {
   Switch,
 } from "@/components/shared";
 import { toast } from "sonner";
-import { X, BracesIcon, Variable, Search, Loader2, Calculator, PercentIcon } from "lucide-react";
+import { X, BracesIcon, Variable, Search, Loader2, Calculator, PercentIcon, PlusCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import AddElementDialog from "./add-element-dialog";
 import EditElementDialog from "./edit-element-dialog";
 import AddTradeDialog from "./add-trade-dialog";
@@ -177,17 +178,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     } else {
       // If it's an array, pass it directly
       updateVariables(newVariables);
-    }
-  };
-
-  // Helper function to extract variable names from formulas
-  const extractVariableNamesFromFormula = (formula: string): string[] => {
-    if (!formula) return [];
-    const variableNameRegex = /\{([^}]+)\}/g;
-    const matches = formula.match(variableNameRegex);
-    if (!matches) return [];
-    return matches.map((match) => match.substring(1, match.length - 1));
-  };
+    }  };
 
   // API Query for variables (for auto-importing)
   const { data: variablesData } = useQuery(
@@ -221,9 +212,10 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   const [newVarDefaultValue, setNewVarDefaultValue] = useState(0);
   const [newVarDescription, setNewVarDescription] = useState("");
   const [newVarDefaultVariableType, setNewVarDefaultVariableType] = useState("");
-
   const [tradeSearchQuery, setTradeSearchQuery] = useState("");
-  const [isTradeSearchOpen, setIsTradeSearchOpen] = useState(false);  const [newTradeName, setNewTradeName] = useState("");
+  const [isTradeSearchOpen, setIsTradeSearchOpen] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(-1);
+  const [newTradeName, setNewTradeName] = useState("");
   const [newTradeDescription, setNewTradeDescription] = useState("");
   const [newTradeImage, setNewTradeImage] = useState("");
   const trades = data.trades || [];
@@ -652,10 +644,10 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       ? (searchVariablesData.data as VariableResponse[]).filter(
           (variable) =>
             variable.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-            variable.origin === "original"
+            variable.origin === "original" &&
+            !variables.some((v) => v.id === variable.id)
         )
       : [];
-
   const filteredTrades =
     tradeSearchQuery === ""
       ? []
@@ -667,7 +659,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
             trade.origin === "original"
         )
       : [];
-
   const filteredElements =
     elementSearchQuery === ""
       ? []
@@ -688,6 +679,20 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
           return matchesQuery && !isAlreadyInTrade;
         })
       : [];
+
+  // Add helper function to extract variable names from formulas
+  const extractVariableNamesFromFormula = (formula: string): string[] => {
+    if (!formula) return [];
+    const matches = formula.match(/\{([^}]+)\}/g) || [];
+    return matches.map(match => match.slice(1, -1));
+  };
+
+  // Add helper function to check exact matches
+  const hasExactMatch = (query: string, items: any[], nameField: string = 'name') => {
+    return items.some(
+      (item) => item[nameField].toLowerCase() === query.toLowerCase()
+    );
+  };
 
   const filterVariableSuggestions = (
     input: string,
@@ -1873,21 +1878,27 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                         if (searchQuery.trim()) {
                           setIsSearchOpen(true);
                         }
-                      }}
-                      onKeyDown={(e) => {
+                      }}                      onKeyDown={(e) => {
                         if (e.key === "Tab" && filteredVariables.length > 0) {
                           e.preventDefault();
                           handleSelectVariable(filteredVariables[0]);
                         } else if (e.key === "Enter") {
-                          if (
-                            filteredVariables.length === 0 ||
-                            !searchQuery.trim()
-                          ) {
+                          // Check for exact match first
+                          const exactMatch = filteredVariables.find(
+                            variable => variable.name.toLowerCase() === searchQuery.trim().toLowerCase()
+                          );
+                          
+                          if (exactMatch) {
+                            // If there's an exact match, select it
+                            handleSelectVariable(exactMatch);
+                          } else if (filteredVariables.length > 0) {
+                            // Otherwise select first suggestion
+                            handleSelectVariable(filteredVariables[0]);
+                          } else if (searchQuery.trim()) {
+                            // If no matches, open create dialog
                             setIsSearchOpen(false);
                             setShowAddDialog(true);
                             setNewVarName(searchQuery.trim());
-                          } else if (filteredVariables.length > 0) {
-                            handleSelectVariable(filteredVariables[0]);
                           }
                         }
                       }}
@@ -2084,17 +2095,20 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                                 Value:
                               </span>
                               {inlineEditingVariableId === variable.id || 
-                               (isZeroOrEmpty(variable.value) && inlineEditingVariableId === "zero-values-ready") ? (
-                                <div className="flex">
+                               (isZeroOrEmpty(variable.value) && inlineEditingVariableId === "zero-values-ready") ? (                                <div className="flex">
                                   <Input 
                                     type="number"
+                                    min="0"
+                                    step="any"
                                     value={inlineEditingVariableId === variable.id ? inlineEditValue : (variable.value || 0)}
                                     onChange={(e) => {
+                                      // Prevent negative values
+                                      const value = Math.max(0, Number(e.target.value));
                                       if (inlineEditingVariableId === "zero-values-ready") {
                                         setInlineEditingVariableId(variable.id);
-                                        setInlineEditValue(Number(e.target.value));
+                                        setInlineEditValue(value);
                                       } else {
-                                        setInlineEditValue(Number(e.target.value));
+                                        setInlineEditValue(value);
                                       }
                                     }}
                                     onFocus={(e) => {
@@ -2297,15 +2311,51 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                         if (tradeSearchQuery.trim()) {
                           setIsTradeSearchOpen(true);
                         }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Tab" && filteredTrades.length > 0) {
+                      }}                      onKeyDown={(e) => {
+                        // Handle up/down arrows
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex((prev) => {
+                            const maxIndex = !hasExactMatch(
+                              tradeSearchQuery,
+                              filteredTrades
+                            )
+                              ? filteredTrades.length
+                              : filteredTrades.length - 1;
+                            return prev < maxIndex ? prev + 1 : 0;
+                          });
+                        } else if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex((prev) =>
+                            prev > 0
+                              ? prev - 1
+                              : !hasExactMatch(tradeSearchQuery, filteredTrades)
+                              ? filteredTrades.length
+                              : filteredTrades.length - 1
+                          );
+                        } else if (e.key === "Tab" && filteredTrades.length > 0) {
                           e.preventDefault();
                           handleSelectTrade(filteredTrades[0]);
                         } else if (e.key === "Enter") {
-                          if (
-                            filteredTrades.length === 0 ||
-                            !tradeSearchQuery.trim()
+                          if (selectedSuggestionIndex >= 0) {
+                            e.preventDefault();
+                            if (
+                              selectedSuggestionIndex ===
+                                filteredTrades.length &&
+                              !hasExactMatch(tradeSearchQuery, filteredTrades)
+                            ) {
+                              // Create new trade option selected
+                              setShowAddTradeDialog(true);
+                              setNewTradeName(tradeSearchQuery.trim());
+                              setIsTradeSearchOpen(false);
+                            } else {
+                              // Existing trade selected
+                              handleSelectTrade(
+                                filteredTrades[selectedSuggestionIndex]
+                              );
+                            }
+                          } else if (
+                            !hasExactMatch(tradeSearchQuery, filteredTrades)
                           ) {
                             setIsTradeSearchOpen(false);
                             setShowAddTradeDialog(true);
@@ -2322,43 +2372,64 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       </div>
                     )}
-                  </div>
-
-                  {tradeSearchQuery.trim() && isTradeSearchOpen && (
+                  </div>                  {tradeSearchQuery.trim() && isTradeSearchOpen && (
                     <div className="absolute z-10 w-full border rounded-md bg-background shadow-md">
                       <div className="p-2">
                         <p className="text-xs text-muted-foreground mb-1 px-2">
                           Trades
                         </p>
-                        {filteredTrades.length > 0 ? (
-                          filteredTrades.map((trade) => (
+                        <div className="space-y-1">
+                          {/* Show create option if no exact match */}
+                          {!hasExactMatch(tradeSearchQuery, filteredTrades) && (
                             <div
-                              key={trade.id}
-                              className="flex items-center justify-between w-full p-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-md"
-                              onClick={() => handleSelectTrade(filteredTrades[0])}
+                              className={cn(
+                                "flex items-center justify-between w-full p-2 text-sm cursor-pointer rounded-md border-t",
+                                selectedSuggestionIndex ===
+                                  filteredTrades.length
+                                  ? "bg-accent text-accent-foreground"
+                                  : "hover:bg-accent hover:text-accent-foreground"
+                              )}
+                              onClick={() => {
+                                setShowAddTradeDialog(true);
+                                setNewTradeName(tradeSearchQuery.trim());
+                                setIsTradeSearchOpen(false);
+                              }}
                             >
                               <div className="flex items-center">
-                                <BracesIcon className="mr-2 h-4 w-4" />
-                                <span>{trade.name}</span>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                <span>Create "{tradeSearchQuery}"</span>
                               </div>
                             </div>
-                          ))
-                        ) : (
-                          <div className="p-2 text-sm">
-                            {trades.some((t) =>
-                              t.name
-                                .toLowerCase()
-                                .includes(tradeSearchQuery.toLowerCase())
-                            ) ? (
+                          )}
+                          {filteredTrades.length > 0 && (
+                            <div className="space-y-1">
+                              {filteredTrades
+                                .filter((trade) => trade.origin === "original")
+                                .map((trade, index) => (
+                                  <div
+                                    key={trade.id}
+                                    className={cn(
+                                      "flex items-center justify-between w-full p-2 text-sm cursor-pointer rounded-md",
+                                      selectedSuggestionIndex === index
+                                        ? "bg-accent text-accent-foreground"
+                                        : "hover:bg-accent hover:text-accent-foreground"
+                                    )}
+                                    onClick={() => handleSelectTrade(trade)}
+                                  >
+                                    <div className="flex items-center">
+                                      <BracesIcon className="mr-2 h-4 w-4" />
+                                      <span>{trade.name}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                          {filteredTrades.length === 0 && hasExactMatch(tradeSearchQuery, filteredTrades) && (
+                            <div className="p-2 text-sm">
                               <span className="text-muted-foreground">Trade already added</span>
-                            ) : (
-                              <div>
-                                <span className="text-muted-foreground">"{tradeSearchQuery}" doesn't exist.</span>
-                                <p className="text-xs mt-1 text-primary">Press Enter to create this trade</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2372,7 +2443,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                     variableDescription={editVariableDescription}
                     setVariableDescription={setEditVariableDescription}
                     variableValue={editVariableValue}
-                    setVariableValue={setEditVariableValue}
+                    setVariableValue={(value) => setEditVariableValue(typeof value === 'function' ? (prev) => Math.max(0, value(prev)) : Math.max(0, value))}
                     variableType={editVariableType}
                     setVariableType={setEditVariableType}
                     variableFormula={editVariableFormula}
@@ -2387,7 +2458,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                     onCancel={() => {
                       setShowEditVariableDialog(false);
                       setCurrentVariableId(null);
-                    }}                    variables={variables}
+                    }}
+                    variables={variables}
                     updateVariables={updateVariablesWrapper}
                   /><AddTradeDialog
                     open={showAddTradeDialog}
@@ -2567,8 +2639,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                                       if (tradeQuery.trim()) {
                                         setIsElementSearchOpen(true);
                                       }
-                                    }}
-                                    onKeyDown={(e) => {
+                                    }}                                    onKeyDown={(e) => {
                                       if (
                                         e.key === "Tab" &&
                                         filteredElements.length > 0
@@ -2581,21 +2652,27 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                                       } else if (e.key === "Enter") {
                                         const tradeQuery =
                                           elementSearchQueries[trade.id] || "";
-                                        if (
-                                          filteredElements.length === 0 ||
-                                          !tradeQuery.trim()
-                                        ) {
-                                          setIsElementSearchOpen(false);
-                                          setShowAddElementDialog(true);
-                                          setCurrentTradeId(trade.id);
-                                          setNewElementName(tradeQuery.trim());
-                                        } else if (
-                                          filteredElements.length === 1
-                                        ) {
+                                          
+                                        // Check for exact match first
+                                        const exactMatch = filteredElements.find(
+                                          element => element.name.toLowerCase() === tradeQuery.trim().toLowerCase()
+                                        );
+                                        
+                                        if (exactMatch) {
+                                          // If there's an exact match, select it
+                                          handleSelectElement(exactMatch, trade.id);
+                                        } else if (filteredElements.length > 0) {
+                                          // Otherwise select first suggestion
                                           handleSelectElement(
                                             filteredElements[0],
                                             trade.id
                                           );
+                                        } else if (tradeQuery.trim()) {
+                                          // If no matches, open create dialog
+                                          setIsElementSearchOpen(false);
+                                          setShowAddElementDialog(true);
+                                          setCurrentTradeId(trade.id);
+                                          setNewElementName(tradeQuery.trim());
                                         }
                                       }
                                     }}
@@ -2824,12 +2901,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                                           variant="ghost"
                                           size="icon"
                                           className="h-5 w-5 rounded-full opacity-0 group-hover:opacity-100 bg-muted/80 text-destructive hover:text-destructive/80"
-                                          onClick={() =>
-                                            handleRemoveElement(
-                                              element.id,
-                                              trade.id
-                                            )
-                                          }
+                                          onClick={() => handleRemoveElement(element.id, trade.id)}
                                         >
                                           <X className="h-2.5 w-2.5" />
                                         </Button>

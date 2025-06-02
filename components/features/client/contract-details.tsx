@@ -17,7 +17,7 @@ import {
   Button,
   Label,
 } from "@/components/shared";
-import { clientSignature, updateContract } from "@/api-calls/server/contracts";
+import { clientSignContract } from "@/api-calls/contracts/client-sign-contract";
 import { toast } from "sonner";
 import { VariableResponse } from "@/types/variables/dto";
 import { TradeResponse } from "@/types/trades/dto";
@@ -83,7 +83,7 @@ export function ContractDetails({ proposal }: ClientContractViewProps) {
           console.error("No contract ID found in the proposal object");
           throw new Error("Contract ID is missing");
         }
-        return clientSignature(contractId, data);
+        return clientSignContract(contractId, data);
       } else {
         throw new Error("No contract found to sign");
       }
@@ -128,7 +128,11 @@ export function ContractDetails({ proposal }: ClientContractViewProps) {
 This Service Agreement is entered into as of the date of signing, by and between:
 
 Service Provider: Simple ProjeX, with its principal place of business at Irvine, California, and
-Client: ${proposal?.client_name || "[CLIENT NAME]"}, with a primary address at ${proposal?.client_address || "[CLIENT ADDRESS]"}.
+Client: ${
+    proposal?.client_name || "[CLIENT NAME]"
+  }, with a primary address at ${
+    proposal?.client_address || "[CLIENT ADDRESS]"
+  }.
 
 1. SCOPE OF SERVICES:
 The Service Provider agrees to perform the services as outlined in the attached Proposal.
@@ -280,12 +284,14 @@ This Agreement shall commence on the date of signing and shall continue until th
 
     // Check if this is a signature field
     if (name === "client_initials") {
+      // Prevent spaces in initials
+      const cleanValue = value.replace(/\s/g, '');
       setSignatures((prev) => ({
         ...prev,
         client: {
           ...prev.client,
           type: "text",
-          value: value,
+          value: cleanValue,
         },
       }));
     }
@@ -329,9 +335,9 @@ This Agreement shall commence on the date of signing and shall continue until th
   // Format date to a readable format
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
+      month: "2-digit",
+      day: "2-digit",
       year: "numeric",
-      month: "long",
-      day: "numeric",
     });
   };
 
@@ -382,7 +388,8 @@ This Agreement shall commence on the date of signing and shall continue until th
             This proposal doesn't have a contract attached to it yet.
           </p>
           <p className="text-amber-600">
-            Please contact your contractor to set up a contract for this proposal.
+            Please contact your contractor to set up a contract for this
+            proposal.
           </p>
         </div>
       ) : (
@@ -460,12 +467,8 @@ This Agreement shall commence on the date of signing and shall continue until th
                       </div>
 
                       <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">
-                          Address
-                        </p>
-                        <p className="font-medium">
-                          {proposal.client_address}
-                        </p>
+                        <p className="text-sm text-muted-foreground">Address</p>
+                        <p className="font-medium">{proposal.client_address}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -493,8 +496,8 @@ This Agreement shall commence on the date of signing and shall continue until th
                               ? new Date(
                                   proposal.created_at
                                 ).toLocaleDateString("en-US", {
-                                  month: "long",
-                                  day: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
                                   year: "numeric",
                                 })
                               : "N/A"}
@@ -507,8 +510,8 @@ This Agreement shall commence on the date of signing and shall continue until th
                               ? new Date(
                                   proposal.updated_at
                                 ).toLocaleDateString("en-US", {
-                                  month: "long",
-                                  day: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
                                   year: "numeric",
                                 })
                               : "N/A"}
@@ -594,9 +597,7 @@ This Agreement shall commence on the date of signing and shall continue until th
                 {proposal.project_modules &&
                   proposal.project_modules.length > 0 && (
                     <div className="space-y-4 mt-4">
-                      <h3 className="text-lg font-semibold">
-                        Project Details
-                      </h3>
+                      <h3 className="text-lg font-semibold">Project Details</h3>
                       {proposal.project_modules.map((moduleItem: any) => (
                         <div key={moduleItem.id} className="space-y-4">
                           <h4 className="text-base font-semibold">
@@ -624,8 +625,7 @@ This Agreement shall commence on the date of signing and shall continue until th
                                     .map((element: any) => (
                                       <TableRow key={element.id}>
                                         <TableCell className="font-medium">
-                                          {element.element?.name ||
-                                            "Element"}
+                                          {element.element?.name || "Element"}
                                         </TableCell>
                                         <TableCell>
                                           {element.element?.description ||
@@ -663,9 +663,7 @@ This Agreement shall commence on the date of signing and shall continue until th
                 {proposal.template?.trades &&
                   proposal.template?.trades.length > 0 && (
                     <div className="space-y-6 mt-4">
-                      <h3 className="text-lg font-semibold">
-                        Project Details
-                      </h3>
+                      <h3 className="text-lg font-semibold">Project Details</h3>
                       <div className="grid grid-cols-1 gap-6">
                         {proposal.template?.trades.map(
                           (trade: TradeResponse) => (
@@ -684,11 +682,9 @@ This Agreement shall commence on the date of signing and shall continue until th
                                 <div className="space-y-2">
                                   {trade.elements.map((element: any) => {
                                     // Calculate total without showing the breakdown
-                                    const totalCost = (
-                                      (Number(element.material_cost || 0) +
-                                        Number(element.labor_cost || 0)) *
-                                      (1 + Number(element.markup || 0) / 100)
-                                    ).toFixed(2);
+                                    const totalCost =
+                                      Number(element.material_cost || 0) +
+                                      Number(element.labor_cost || 0);
 
                                     return (
                                       <div
@@ -761,18 +757,25 @@ This Agreement shall commence on the date of signing and shall continue until th
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold">Your Signature</h3>
                     {isContractSigned ? (
-                      <div className="h-24 border rounded-lg flex items-center justify-center bg-muted/20">
-                        {signatures.client.type === "text" ? (
-                          <p className="font-medium text-xl">
-                            {signatures.client.value}
+                      <div>
+                        <div className="h-24 border rounded-lg flex items-center justify-center bg-green-50 border-green-200">
+                          {signatures.client.type === "text" ? (
+                            <p className="font-medium text-xl text-green-800">
+                              {signatures.client.value}
+                            </p>
+                          ) : (
+                            <img
+                              src={signatures.client.value}
+                              alt="Client signature"
+                              className="max-h-full object-contain"
+                            />
+                          )}
+                        </div>
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-center">
+                          <p className="text-sm text-green-800 font-medium">
+                            ✓ Contract Signed Successfully
                           </p>
-                        ) : (
-                          <img
-                            src={signatures.client.value}
-                            alt="Client signature"
-                            className="max-h-full object-contain"
-                          />
-                        )}
+                        </div>
                       </div>
                     ) : (
                       <div className="border rounded-lg p-4 bg-muted/10">
@@ -784,9 +787,7 @@ This Agreement shall commence on the date of signing and shall continue until th
                               name="clientSignatureType"
                               className="w-4 h-4"
                               checked={signatures.client.type === "text"}
-                              onChange={() =>
-                                handleSignatureTypeChange("text")
-                              }
+                              onChange={() => handleSignatureTypeChange("text")}
                             />
                             <Label htmlFor="clientInitialsOption">
                               Type Initials
@@ -819,7 +820,7 @@ This Agreement shall commence on the date of signing and shall continue until th
                               name="client_initials"
                               value={signatures.client.value}
                               onChange={handleInputChange}
-                              placeholder="Type your initials"
+                              placeholder="Type your initials (no spaces)"
                               className="font-medium"
                             />
                             {signatures.client.value && (
@@ -858,11 +859,15 @@ This Agreement shall commence on the date of signing and shall continue until th
                     )}
                     <p className="text-sm text-muted-foreground">
                       Date:{" "}
-                      {new Date().toLocaleDateString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
+                      {proposal?.contract?.client_signed_at
+                        ? formatDate(proposal.contract.client_signed_at)
+                        : isContractSigned
+                        ? new Date().toLocaleDateString("en-US", {
+                            month: "2-digit",
+                            day: "2-digit",
+                            year: "numeric",
+                          })
+                        : "N/A"}
                     </p>
                   </div>
 
@@ -892,9 +897,9 @@ This Agreement shall commence on the date of signing and shall continue until th
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Date:{" "}
-                      {proposal?.contract?.updatedAt
-                        ? formatDate(proposal.contract.updatedAt)
-                        : "Pending"}
+                      {proposal?.contract?.contractor_signed_at
+                        ? formatDate(proposal.contract.contractor_signed_at)
+                        : "N/A"}
                     </p>
                   </div>
                 </div>
@@ -907,7 +912,8 @@ This Agreement shall commence on the date of signing and shall continue until th
                       className="px-8 py-2 text-base"
                       onClick={handleSignContract}
                       disabled={
-                        signContractMutation.isPending || !signatures.client.value
+                        signContractMutation.isPending ||
+                        !signatures.client.value
                       }
                     >
                       {signContractMutation.isPending ? (

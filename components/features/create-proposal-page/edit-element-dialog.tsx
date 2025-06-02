@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { VariableResponse } from "@/types/variables/dto";
 import { ElementResponse } from "@/types/elements/dto";
 import { ElementDialog } from "./components/element-dialog";
@@ -17,7 +17,8 @@ interface EditElementDialogProps {
     materialFormula: string;
     laborFormula: string;
     markup: number;
-  }) => void;  elementToEdit: ElementResponse | null;
+  }) => void;  
+  elementToEdit: ElementResponse | null;
   variables: VariableResponse[];
   updateVariables?: React.Dispatch<React.SetStateAction<VariableResponse[]>>;
   isUpdatingElement: boolean;
@@ -47,6 +48,11 @@ const EditElementDialog: React.FC<EditElementDialogProps> = ({
   const [localVariables, setLocalVariables] = useState<VariableResponse[]>(variables);
   const queryClient = useQueryClient();
 
+  // Update localVariables when variables prop changes
+  useEffect(() => {
+    setLocalVariables(variables);
+  }, [variables]);
+
   // Add mutation for updating element
   const updateElementMutation = useMutation({
     mutationFn: ({ elementId, data }: { elementId: string; data: any }) => {
@@ -71,6 +77,15 @@ const EditElementDialog: React.FC<EditElementDialogProps> = ({
   }) => {
     if (data.name.trim()) {
       onEditElement(data);
+    }
+  };
+
+  // Function to ensure variable is added to parent component
+  const ensureVariableInParent = (variable: VariableResponse) => {
+    if (!localVariables.some(v => v.id === variable.id)) {
+      const updatedVariables = [...localVariables, variable];
+      setLocalVariables(updatedVariables);
+      updateVariables(updatedVariables);
     }
   };
 
@@ -131,10 +146,18 @@ const EditElementDialog: React.FC<EditElementDialogProps> = ({
         // Instead of creating the variable right away, we'll pass the request to the parent
         // The parent component will handle opening the Add Variable dialog
         if (window.openVariableDialog) {
-          window.openVariableDialog(variableName, callback);
+          window.openVariableDialog(variableName, (newVariable) => {
+            // After variable is created, make sure it's added to our local state
+            if (newVariable) {
+              ensureVariableInParent(newVariable);
+            }
+            // Then pass it to the original callback
+            callback(newVariable);
+          });
         } else {
           console.warn("openVariableDialog function not available on window object");
-        }      }}
+        }
+      }}
     />
   );
 };
