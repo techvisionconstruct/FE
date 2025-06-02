@@ -1,7 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, Tabs, TabsContent, Button } from "@/components/shared";
+import {
+  Card,
+  Tabs,
+  TabsContent,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/shared";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -23,6 +33,7 @@ import { CreateContract } from "@/components/features/create-proposal-page/creat
 import { createContract } from "@/api-calls/contracts/create-contract";
 import { ContractCreateRequest } from "@/types/contracts/dto";
 import { getProposalById } from "@/api-calls/proposals/get-proposal-by-id";
+import { validateAllProposalFields } from "@/components/features/create-proposal-page/components/validation";
 
 interface ProposalDetailsProps {
   proposal?: ProposalResponse; // Make proposal optional
@@ -35,6 +46,9 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
   const [contractId, setContractId] = useState<string>("");
   const [template, setTemplate] = useState<TemplateResponse | null>(null);
   const [createdProposal, setCreatedProposal] = useState<ProposalResponse>();
+  const [detailsErrors, setDetailsErrors] = useState<Record<string, string>>(
+    {}
+  );
 
   const [formData, setFormData] = useState<{
     name: string;
@@ -73,6 +87,9 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     proposal?.template?.variables || []
   );
 
+  const [missingVariables, setMissingVariables] = useState<string[]>([]);
+  const [showMissingVariablesDialog, setShowMissingVariablesDialog] =
+    useState(false);
 
   const updateFormData = (data: any) => {
     setFormData((prev) => ({
@@ -81,27 +98,122 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     }));
   };
 
+  const validateVariables = () => {
+    const usedVariableIds = new Set<string>();
+
+    // Collect all variable IDs used in elements
+    tradeObjects.forEach((trade) => {
+      trade.elements?.forEach((element) => {
+        element.material_formula_variables?.forEach((variable) =>
+          usedVariableIds.add(variable.id)
+        );
+        element.labor_formula_variables?.forEach((variable) =>
+          usedVariableIds.add(variable.id)
+        );
+      });
+    });
+
+    // Check if all used variables are in the variable list
+    const missing = Array.from(usedVariableIds).filter(
+      (id) => !variableObjects.some((variable) => variable.id === id)
+    );
+
+    if (missing.length > 0) {
+      setMissingVariables(
+        missing.map(
+          (id) =>
+            tradeObjects
+              .flatMap((trade) =>
+                trade.elements?.flatMap((element) =>
+                  element.material_formula_variables
+                    ?.concat(element.labor_formula_variables || [])
+                    .filter((variable) => variable.id === id)
+                )
+              )
+              .find((variable) => variable?.id === id)?.name ||
+            "Unknown Variable"
+        )
+      );
+      setShowMissingVariablesDialog(true);
+      return false;
+    }
+
+    return true;
+  };
+
   const handleNext = async () => {
-    if (currentStep === "template") {
-      setCurrentStep("details");
-    } else if (currentStep === "details") {
+    if (currentStep === "details") {
+      // Use the shared validation function
+      const errors = validateAllProposalFields(formData);
+      setDetailsErrors(errors);
+      if (Object.keys(errors).length > 0) {
+        toast.error("Please fill in all required fields correctly.");
+        return;
+      }
       setCurrentStep("trades");
+    } else if (currentStep === "template") {
+      setCurrentStep("details");
     } else if (currentStep === "trades") {
       try {
-        // Wait for template update to complete
         await handleUpdateTemplate();
-        // Wait for proposal refresh
         if (createdProposal?.id) {
           const updatedProposal = await getProposalById(createdProposal.id);
           setCreatedProposal(updatedProposal.data);
         }
-        // Only change step after data is updated
         setCurrentStep("contract");
       } catch (error) {
         console.error("Error updating template:", error);
         toast.error("Failed to update template before proceeding");
       }
     }
+  };
+
+  const handleUpdateProposal = async () => {
+    if (!createdProposal?.id) {
+      toast.error("No proposal to update");
+      return;
+    }
+
+    const updatedProposalDetails = {
+      name: formData.name,
+      description: formData.description,
+      status: formData.status,
+      image: formData.image,
+      client_name: formData.client_name,
+      client_email: formData.client_email,
+      client_phone: formData.client_phone,
+      client_address: formData.client_address,
+      valid_until: formData.valid_until,
+      location: formData.location,
+      template: formData.template?.id || null,
+    };
+
+    return new Promise((resolve, reject) => {
+      updateTemplateMutation(
+        {
+          templateId: createdProposal.template?.id ?? "",
+          template: updatedProposalDetails,
+        },
+        {
+          onSuccess: async (data) => {
+            try {
+              const updatedProposal = await getProposalById(createdProposal.id);
+              setCreatedProposal(updatedProposal.data);
+              toast.success("Proposal updated successfully!");
+              resolve(data);
+            } catch (error) {
+              console.error("Error refreshing proposal:", error);
+              reject(error);
+            }
+          },
+          onError: (error) => {
+            console.error("Error updating proposal:", error);
+            toast.error("Failed to update proposal");
+            reject(error);
+          },
+        }
+      );
+    });
   };
 
   const handleBack = () => {
@@ -117,9 +229,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
   const createProposalMutation = useMutation({
     mutationFn: createProposal,
     onSuccess: () => {
-      toast.success("Proposal created successfully!", {
-        description: "Your proposal has been saved",
-      });
+      // Removed duplicate toast.success here
     },
     onError: (error: any) => {
       toast.error("Failed to create proposal", {
@@ -132,8 +242,9 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
   const createContractMutation = useMutation({
     mutationFn: (contractData: ContractCreateRequest) =>
       createContract(contractData),
-    onSuccess: () => {
-      toast.success("Contract created successfully!");
+    onSuccess: (contractData) => {
+      setContractId(contractData.data.id);
+      // Removed duplicate toast.success here
     },
     onError: (error: any) => {
       toast.error(
@@ -160,6 +271,13 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     });
   console.log("Created Proposal:", createdProposal);
   const handleCreateProposalAndContract = async () => {
+    const errors = validateAllProposalFields(formData);
+    setDetailsErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error("Please fill in all required fields correctly.");
+      return;
+    }
+
     const templateId = formData.template ? formData.template.id : null;
 
     const proposalDetails = {
@@ -186,6 +304,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             setTemplateId(proposalData.data.template.id);
             setCreatedProposal(proposalData.data);
 
+            // Toast for successful proposal creation
             toast.success("Proposal created successfully!");
 
             const contractDetails = {
@@ -250,7 +369,9 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             // Wait for proposal refresh here
             if (createdProposal?.id) {
               try {
-                const updatedProposal = await getProposalById(createdProposal.id);
+                const updatedProposal = await getProposalById(
+                  createdProposal.id
+                );
                 setCreatedProposal(updatedProposal.data);
                 resolve(data);
               } catch (error) {
@@ -321,11 +442,27 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             <div className="flex flex-row gap-2 justify-end mt-6">
               {currentStep === "trades" && (
                 <>
-                  <Button onClick={handleUpdateTemplate}>Save as Draft</Button>
+                  <Button
+                    onClick={() => {
+                      if (!validateVariables()) {
+                        setShowMissingVariablesDialog(true); // Show dialog if validation fails
+                        return;
+                      }
+                      handleUpdateTemplate();
+                    }}
+                  >
+                    Save as Draft
+                  </Button>
                   <Button
                     variant="outline"
                     className="mb-4"
-                    onClick={sendProposalToClient}
+                    onClick={() => {
+                      if (!validateVariables()) {
+                        setShowMissingVariablesDialog(true); // Show dialog if validation fails
+                        return;
+                      }
+                      sendProposalToClient();
+                    }}
                     disabled={
                       isSending ||
                       (!createdProposal && !proposal) ||
@@ -346,11 +483,18 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                   </Button>
                 </>
               )}
+
               {currentStep === "contract" && (
                 <Button
                   variant="outline"
                   className="mb-4"
-                  onClick={sendProposalToClient}
+                  onClick={() => {
+                    if (!validateVariables()) {
+                      setShowMissingVariablesDialog(true); // Show dialog if validation fails
+                      return;
+                    }
+                    sendProposalToClient();
+                  }}
                   disabled={
                     isSending ||
                     (!createdProposal && !proposal) ||
@@ -420,6 +564,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                 location: formData.location,
               }}
               updateData={(data) => updateFormData(data)}
+              errors={detailsErrors}
             />
             <div className="flex justify-between mt-6">
               <Button variant="outline" onClick={handleBack}>
@@ -525,7 +670,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
               <Button variant="outline" onClick={handleBack}>
                 Back
               </Button>
-              <Button 
+              <Button
                 onClick={handleNext}
                 disabled={isUpdatingTemplate}
                 className="flex items-center gap-2"
@@ -576,6 +721,80 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
           </TabsContent>
         </Tabs>
       </Card>
+
+      {/* Missing Variables Dialog */}
+      <Dialog
+        open={showMissingVariablesDialog}
+        onOpenChange={setShowMissingVariablesDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Missing Variables</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>
+              The following variables are used in elements but are missing from
+              the variable list:
+            </p>
+            <ul className="mt-2 list-disc pl-5">
+              {missingVariables.map((variable, index) => (
+                <li key={index}>{variable}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-sm text-destructive font-medium">
+              Please add these variables to proceed.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowMissingVariablesDialog(false)}
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                // Add missing variables to the variable list
+                const variablesToAdd = tradeObjects
+                  .flatMap((trade) =>
+                    trade.elements?.flatMap((element) =>
+                      element.material_formula_variables
+                        ?.concat(element.labor_formula_variables || [])
+                        .filter((variable) =>
+                          missingVariables.includes(variable.name)
+                        )
+                    )
+                  )
+                  .filter(
+                    (variable, index, self) =>
+                      variable &&
+                      !variableObjects.some((v) => v.id === variable.id) &&
+                      self.findIndex((v) => v?.id === variable.id) === index
+                  );
+
+                if (variablesToAdd.length > 0) {
+                  const updatedVariables = [
+                    ...variableObjects,
+                    ...variablesToAdd,
+                  ];
+                  setVariableObjects(
+                    updatedVariables.filter(
+                      (v): v is VariableResponse => v !== undefined
+                    )
+                  );
+                  toast.success(
+                    `${variablesToAdd.length} variable(s) added successfully.`
+                  );
+                }
+
+                setShowMissingVariablesDialog(false);
+              }}
+            >
+              Add Variable/s
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
