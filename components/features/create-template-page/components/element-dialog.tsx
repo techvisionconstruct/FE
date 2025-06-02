@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import Image from "next/image"; // Add this import
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -17,10 +17,10 @@ import {
 import { BracesIcon, Loader2, AlertCircle, X } from "lucide-react";
 import { VariableResponse } from "@/types/variables/dto";
 import { ElementResponse } from "@/types/elements/dto";
-import { ProductResponse } from "@/types/products/dto";
 import { FormulaBuilder } from "./formula-builder";
 import { FormulaToken, useFormula } from "../hooks/use-formula";
 import { toast } from "sonner";
+import { ProductResponse } from "@/types/products/dto";
 import { useQuery } from "@tanstack/react-query";
 import { getProducts } from "@/query-options/products";
 
@@ -41,7 +41,6 @@ interface ElementDialogProps {
     image?: string;
     materialFormula: string;
     laborFormula: string;
-    markup: number;
   }) => void;
   elementToEdit?: ElementResponse | null;
   initialName?: string;
@@ -50,8 +49,6 @@ interface ElementDialogProps {
   isSubmitting: boolean;
   dialogTitle: string;
   submitButtonText: string;
-  includeMarkup?: boolean;
-  initialMarkup?: number;
   onRequestCreateVariable?: (
     variableName: string,
     callback: (newVariable: VariableResponse) => void
@@ -69,8 +66,6 @@ export function ElementDialog({
   isSubmitting,
   dialogTitle,
   submitButtonText,
-  includeMarkup = false,
-  initialMarkup = 0,
   onRequestCreateVariable,
 }: ElementDialogProps) {
   // Generate a unique ID for this dialog instance
@@ -83,7 +78,6 @@ export function ElementDialog({
   const [name, setName] = useState(elementToEdit?.name || initialName);
   const [description, setDescription] = useState(elementToEdit?.description || "");
   const [image, setImage] = useState<string>(elementToEdit?.image || "");
-  const [markup, setMarkup] = useState(elementToEdit?.markup || initialMarkup);
 
   // Track which formula field is active/focused
   const [activeFormulaField, setActiveFormulaField] = useState<
@@ -184,7 +178,6 @@ export function ElementDialog({
       setImage("");
       setName("");
       setDescription("");
-      setMarkup(initialMarkup);
       
       // Clear formula tokens
       setMaterialFormulaTokens([]);
@@ -205,7 +198,7 @@ export function ElementDialog({
         formulaType: null,
       };
     }
-  }, [isOpen, initialMarkup, setMaterialFormulaTokens, setLaborFormulaTokens]);
+  }, [isOpen, setMaterialFormulaTokens, setLaborFormulaTokens]);
 
   // Initialize form when opening/editing
   useEffect(() => {
@@ -218,12 +211,10 @@ export function ElementDialog({
         setName(elementToEdit.name);
         setDescription(elementToEdit.description || "");
         setImage(elementToEdit.image || "");
-        setMarkup(elementToEdit.markup || initialMarkup);
       } else {
         setName(initialName);
         setDescription("");
         setImage("");
-        setMarkup(initialMarkup);
       }
 
       const wasOpen = localStorage.getItem(storageKeys.IS_OPEN_KEY) === "true";
@@ -349,7 +340,6 @@ export function ElementDialog({
     isOpen,
     elementToEdit,
     initialName,
-    initialMarkup,
     filteredVariables,
     parseFormulaToTokens,
     replaceVariableIdsWithNames,
@@ -385,41 +375,66 @@ export function ElementDialog({
     if (pendingVariable.variable && pendingVariable.formulaType) {
       try {
         // Get current formulas from localStorage to ensure we have latest state
-        const { materialTokens, laborTokens } = getFormulasFromStorage();
+        const { materialTokens: storedMaterialTokens, laborTokens: storedLaborTokens } = getFormulasFromStorage();
 
         // Create a token for the new variable
         const newToken: FormulaToken = {
           id: Date.now() + Math.random(),
           text: pendingVariable.variable.name || "",
+          displayText: pendingVariable.variable.name || "",
           type: "variable",
         };
 
         if (newToken.text) {
           if (pendingVariable.formulaType === "material") {
+            // Make sure we're using the most up-to-date tokens
+            // Either from state or localStorage, whichever has more tokens
+            const baseTokens = materialFormulaTokens.length >= storedMaterialTokens.length
+              ? materialFormulaTokens
+              : storedMaterialTokens;
+              
             // Update material formula with the new variable
-            const updatedMaterialTokens = [...materialTokens, newToken];
+            const updatedMaterialTokens = [...baseTokens, newToken];
             setMaterialFormulaTokens(updatedMaterialTokens);
-
-            // Make sure to preserve labor formula
-            if (laborTokens.length > 0) {
-              setLaborFormulaTokens(laborTokens);
+            
+            // Make sure to preserve labor formula - use the tokens with more elements
+            const laborBaseTokens = laborFormulaTokens.length >= storedLaborTokens.length
+              ? laborFormulaTokens
+              : storedLaborTokens;
+              
+            if (laborBaseTokens.length > 0) {
+              setLaborFormulaTokens(laborBaseTokens);
             }
+            
+            console.log(`Variable "${newToken.text}" added to material formula`);
           } else if (pendingVariable.formulaType === "labor") {
+            // Make sure we're using the most up-to-date tokens
+            // Either from state or localStorage, whichever has more tokens
+            const baseTokens = laborFormulaTokens.length >= storedLaborTokens.length
+              ? laborFormulaTokens
+              : storedLaborTokens;
+              
             // Update labor formula with the new variable
-            const updatedLaborTokens = [...laborTokens, newToken];
+            const updatedLaborTokens = [...baseTokens, newToken];
             setLaborFormulaTokens(updatedLaborTokens);
-
-            // Make sure to preserve material formula
-            if (materialTokens.length > 0) {
-              setMaterialFormulaTokens(materialTokens);
+            
+            // Make sure to preserve material formula - use the tokens with more elements
+            const materialBaseTokens = materialFormulaTokens.length >= storedMaterialTokens.length
+              ? materialFormulaTokens
+              : storedMaterialTokens;
+              
+            if (materialBaseTokens.length > 0) {
+              setMaterialFormulaTokens(materialBaseTokens);
             }
+            
+            console.log(`Variable "${newToken.text}" added to labor formula`);
           }
         }
-
+        
         // Reset the pending variable
         pendingVariableRef.current = {
           variable: null,
-          formulaType: null,
+          formulaType: null
         };
       } catch (error) {
         console.error("Error adding variable to formula:", error);
@@ -460,7 +475,6 @@ export function ElementDialog({
       description: description.trim(),
       materialFormula,
       laborFormula,
-      markup,
       materialTokens: materialFormulaTokens,
       laborTokens: laborFormulaTokens,
     });
@@ -474,7 +488,6 @@ export function ElementDialog({
       image,
       materialFormula,
       laborFormula,
-      markup,
     });
   };
 
@@ -655,16 +668,12 @@ export function ElementDialog({
       image,
       materialFormula,
       laborFormula,
-      markup,
     });
 
     // Clear all form data after submission
     setImage("");
     setName("");
     setDescription("");
-    setMarkup(initialMarkup);
-    setMaterialFormulaTokens([]);
-    setLaborFormulaTokens([]);
   };
 
   const handleCancel = () => {
@@ -672,9 +681,6 @@ export function ElementDialog({
     setImage("");
     setName("");
     setDescription("");
-    setMarkup(initialMarkup);
-    setMaterialFormulaTokens([]);
-    setLaborFormulaTokens([]);
     clearFormulaStorage();
     onOpenChange(false);
   };
@@ -686,9 +692,6 @@ export function ElementDialog({
       setImage("");
       setName("");
       setDescription("");
-      setMarkup(initialMarkup);
-      setMaterialFormulaTokens([]);
-      setLaborFormulaTokens([]);
       clearFormulaStorage();
       
       // Reset errors and validation state
@@ -711,7 +714,8 @@ export function ElementDialog({
             <BracesIcon className="mr-2 h-4 w-4" />
             {dialogTitle}
           </DialogTitle>
-        </DialogHeader>        <div className="grid gap-5 py-5">
+        </DialogHeader>
+        <div className="grid gap-5 py-5">
           {/* Two-column layout for Name/Description and Image */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* First column: Name and Description */}
@@ -869,25 +873,6 @@ export function ElementDialog({
               onValidationError={setLaborFormulaError}
             />
           </div>
-
-          {/* Markup Field (only if includeMarkup is true) */}
-          {includeMarkup && (
-            <div className="grid gap-2">
-              <Label htmlFor="element-markup">Markup Percentage (%)</Label>
-              <Input
-                id="element-markup"
-                type="number"
-                min="0"
-                max="100"
-                placeholder="15"
-                value={markup || ""}
-                onChange={(e) => setMarkup(parseFloat(e.target.value) || 0)}
-              />
-              <div className="text-xs text-muted-foreground">
-                Enter the percentage markup to apply to this element (e.g., 15 for 15%)
-              </div>
-            </div>
-          )}
         </div>
         <DialogFooter>
           <Button

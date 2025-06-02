@@ -443,28 +443,21 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   // =========== EVENT HANDLERS ===========
 
   const handleSelectVariable = (variable: VariableResponse) => {
-    // Make sure we work with local variables to prevent state loss
-    const newVar: VariableResponse = {
-      id: variable.id.toString(),
-      name: variable.name,
-      description: variable.description,
-      value: variable.value,
-      is_global: variable.is_global,
-      variable_type: variable.variable_type,
-      created_at: variable.created_at,
-      updated_at: variable.updated_at,
-      created_by: variable.created_by,
-      updated_by: variable.updated_by,
-    };
+    // First check if variable is already in your template variables
+    if (!variables.some((v) => v.id === variable.id)) {
+      // Add to template variables (use callback form to ensure latest state)
+      setLocalVariables((currentVars) => [...currentVars, variable]);
 
-    if (!localVariables.some((v) => v.id === newVar.id)) {
-      const updatedVariables = [...localVariables, newVar];
-      setLocalVariables(updatedVariables);
-      updateVariables(updatedVariables);
+      // Show success toast
+      toast.success("Variable added", {
+        position: "top-center",
+        description: `"${variable.name}" has been added to your template.`,
+      });
     }
 
-    setIsSearchOpen(false);
+    // Clear search
     setSearchQuery("");
+    setIsSearchOpen(false);
   };
 
   const handleAddVariable = () => {

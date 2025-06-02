@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { VariableResponse } from "@/types/variables/dto";
 import { ElementDialog } from "./components/element-dialog";
 
 interface AddElementDialogProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;  onAddElement: (data: {
+  onOpenChange: (open: boolean) => void;  
+  onAddElement: (data: {
     name: string;
     description: string;
     image?: string;
@@ -33,8 +34,14 @@ const AddElementDialog: React.FC<AddElementDialogProps> = ({
   isCreatingElement,
   isGlobalMarkupEnabled = false,
   globalMarkupValue = 0,
-}) => {    // Store a local copy of variables to prevent issues with autocomplete
-    const [localVariables, setLocalVariables] = useState<VariableResponse[]>([]);
+}) => {
+  // Initialize localVariables with variables from props
+  const [localVariables, setLocalVariables] = useState<VariableResponse[]>(variables);
+  
+  // Update localVariables when variables prop changes
+  useEffect(() => {
+    setLocalVariables(variables);
+  }, [variables]);
   
   const handleSubmit = (data: {
     name: string;
@@ -49,6 +56,14 @@ const AddElementDialog: React.FC<AddElementDialogProps> = ({
     }
   };
 
+  // Function to ensure variable is added to parent component
+  const ensureVariableInParent = (variable: VariableResponse) => {
+    if (!localVariables.some(v => v.id === variable.id)) {
+      const updatedVariables = [...localVariables, variable];
+      setLocalVariables(updatedVariables);
+      updateVariables(updatedVariables);
+    }
+  };
   
   return (
     <ElementDialog
@@ -56,7 +71,7 @@ const AddElementDialog: React.FC<AddElementDialogProps> = ({
       onOpenChange={onOpenChange}
       onSubmit={handleSubmit}
       initialName={newElementName}
-      variables={variables}
+      variables={localVariables}
       updateVariables={(updatedVariables) => {
         if (typeof updatedVariables === 'function') {
           // If it's a function, compute the new value based on current localVariables
@@ -84,7 +99,14 @@ const AddElementDialog: React.FC<AddElementDialogProps> = ({
         // Instead of creating the variable right away, we'll pass the request to the parent
         // The parent component will handle opening the Add Variable dialog
         if (window.openVariableDialog) {
-          window.openVariableDialog(variableName, callback);
+          window.openVariableDialog(variableName, (newVariable) => {
+            // After variable is created, make sure it's added to our local state
+            if (newVariable) {
+              ensureVariableInParent(newVariable);
+            }
+            // Then pass it to the original callback
+            callback(newVariable);
+          });
         } else {
           console.warn('openVariableDialog function not available on window object');
         }

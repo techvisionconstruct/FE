@@ -14,10 +14,20 @@ import {
 import { VariableResponse } from "@/types/variables/dto";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
-import { getAllVariables } from "@/api-calls/variables/get-all-variables";
 import { FormulaToken } from "../hooks/use-formula";
 import { getVariables } from "@/query-options/variables";
 import { getProducts } from "@/query-options/products";
+
+// Define interfaces for type safety
+interface SuggestionItem {
+  id: string;
+  name?: string;
+  title?: string;
+  isProduct?: boolean;
+  isCreateSuggestion?: boolean;
+  displayText?: string;
+  is_global?: boolean;
+}
 
 interface FormulaBuilderProps {
   formulaTokens: FormulaToken[];
@@ -27,7 +37,7 @@ interface FormulaBuilderProps {
   hasError?: boolean;
   onCreateVariable?: (name: string, formulaType?: "material" | "labor") => void;
   formulaType?: "material" | "labor";
-  onValidationError?: (error: string | null) => void; // NEW PROP
+  onValidationError?: (error: string | null) => void;
 }
 
 // Function to validate a mathematical formula
@@ -183,7 +193,6 @@ export function FormulaBuilder({
         variable && (variable.is_global || variable.origin === "derived")
     );
   }, [variables]);
-
   // Ensure formulaTokens is always an array of valid tokens
   const validFormulaTokens = useMemo(() => {
     if (!Array.isArray(formulaTokens)) return [];
@@ -203,7 +212,6 @@ export function FormulaBuilder({
         displayText: token.displayText !== undefined ? token.displayText : token.text
       }));
   }, [formulaTokens]);
-
   const addFormulaToken = (
     text: string,
     displayText: string,
@@ -304,63 +312,64 @@ export function FormulaBuilder({
         return;
       }
 
-      if (suggestions.length > 0) {
-        const selectedItem = suggestions[selectedSuggestion];
-        const isProduct = "isProduct" in selectedItem && selectedItem.isProduct;
-        const isCreateSuggestion = "isCreateSuggestion" in selectedItem && selectedItem.isCreateSuggestion;
+      // ENTER behavior: Create new items when no exact match exists
+      if (formulaInput.trim()) {
+        const hasExactMatch = suggestions.some((item) => {
+          const isProduct = "isProduct" in item && item.isProduct;
+          const isCreateSuggestion = "isCreateSuggestion" in item && item.isCreateSuggestion;
+          
+          if (isCreateSuggestion) return false;
+          
+          const itemName = isProduct ? item.title : item.name;
+          return itemName.toLowerCase() === formulaInput.trim().toLowerCase();
+        });
 
-        if (isCreateSuggestion) {
-          // Handle create variable suggestion
-          safeCreateVariable(selectedItem.name);
-          return;
-        }
+        if (hasExactMatch) {
+          // Select the exact match
+          const exactMatch = suggestions.find((item) => {
+            const isProduct = "isProduct" in item && item.isProduct;
+            const isCreateSuggestion = "isCreateSuggestion" in item && item.isCreateSuggestion;
+            
+            if (isCreateSuggestion) return false;
+            
+            const itemName = isProduct ? item.title : item.name;
+            return itemName.toLowerCase() === formulaInput.trim().toLowerCase();
+          });
+          
+          if (exactMatch) {
+            const isProduct = "isProduct" in exactMatch && exactMatch.isProduct;
+            
+            if (isProduct) {
+              addFormulaToken(exactMatch.id, exactMatch.title, "product");
+            } else {
+              // Add variable to template if not already present
+              if (updateVariables && !variables.some((v) => v.id === exactMatch.id)) {
+                updateVariables((currentVariables) => {
+                  if (currentVariables.some((v) => v.id === exactMatch.id)) {
+                    return currentVariables;
+                  }
+                  return [...currentVariables, exactMatch];
+                });
 
-        if (isProduct) {
-          // Handle product selection
-          addFormulaToken(selectedItem.id, selectedItem.title, "product");
-          return;
-        }
-
-        // Handle variable selection (existing code)
-        if (
-          updateVariables &&
-          !variables.some((v) => v.id === selectedItem.id)
-        ) {
-          updateVariables((currentVariables) => {
-            if (currentVariables.some((v) => v.id === selectedItem.id)) {
-              return currentVariables;
+                toast.success("Variable automatically added", {
+                  description: `"${exactMatch.name}" has been added to your template.`,
+                });
+              }
+              addFormulaToken(exactMatch.name, exactMatch.name, "variable");
             }
-            return [...currentVariables, selectedItem];
-          });
-
-          toast.success("Variable automatically added", {
-            description: `"${selectedItem.name}" has been added to your template.`,
-          });
-        }
-        addFormulaToken(selectedItem.name, selectedItem.name, "variable");
-      } else if (
-        formulaInput.trim() &&
-        !variables.some(
-          (v) => v.name.toLowerCase() === formulaInput.toLowerCase()
-        )
-      ) {
-        safeCreateVariable(formulaInput.trim());
-      } else if (formulaInput.trim()) {
-        const exactMatch = variables.find(
-          (v) => v.name.toLowerCase() === formulaInput.trim().toLowerCase()
-        );
-        if (exactMatch) {
-          addFormulaToken(exactMatch.name, exactMatch.name, "variable");
+          }
+        } else {
+          // No exact match - create new variable
+          safeCreateVariable(formulaInput.trim());
         }
       }
     } else if (e.key === "Tab" && suggestions.length > 0) {
       e.preventDefault();
+      
+      // TAB behavior: Import first suggestion/exact match
       const selectedItem = suggestions[selectedSuggestion];
-
       const isProduct = "isProduct" in selectedItem && selectedItem.isProduct;
       const isCreateSuggestion = "isCreateSuggestion" in selectedItem && selectedItem.isCreateSuggestion;
-
-
 
       if (isCreateSuggestion) {
         // Handle create variable suggestion
@@ -370,19 +379,19 @@ export function FormulaBuilder({
 
       if (isProduct) {
         // Handle product selection
-        // Add "product:" prefix to the displayText for better identification
-        addFormulaToken(
-          selectedItem.id,
-          `product:${selectedItem.title}`,
-          "product"
-        );
-
+        addFormulaToken(selectedItem.id, selectedItem.title, "product");
         return;
       }
 
-      // Handle variable selection
+      // Handle variable selection - prevent duplicates in template
       if (updateVariables && !variables.some((v) => v.id === selectedItem.id)) {
-        updateVariables([...variables, selectedItem]);
+        updateVariables((currentVariables) => {
+          if (currentVariables.some((v) => v.id === selectedItem.id)) {
+            return currentVariables;
+          }
+          return [...currentVariables, selectedItem];
+        });
+
         toast.success("Variable automatically added", {
           description: `"${selectedItem.name}" has been added to your template.`,
         });
@@ -663,14 +672,20 @@ export function FormulaBuilder({
                 const displayName = isProduct ? item.title :
                   isCreateSuggestion ? item.displayText :
                     item.name;
+                    
+                // Check if this item is an exact match
+                const isExactMatch = !isCreateSuggestion && 
+                  displayName.toLowerCase() === formulaInput.trim().toLowerCase();
 
                 return (
                   <div
                     key={item.id}
-                    className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground ${selectedSuggestion === index
-                      ? "bg-accent text-accent-foreground"
-                      : ""
-                      }`}                    onClick={() => {
+                    className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground ${
+                      selectedSuggestion === index
+                        ? "bg-accent text-accent-foreground"
+                        : ""
+                    }`}
+                    onClick={() => {
                       if (isCreateSuggestion) {
                         safeCreateVariable(item.name);
                       } else if (isProduct) {
@@ -694,44 +709,74 @@ export function FormulaBuilder({
                       }
                     }}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        {isCreateSuggestion ? (
-                          <PlusCircle className="w-3.5 h-3.5 text-blue-600" />
-                        ) : isProduct ? (
-                          <Package className="w-3.5 h-3.5 text-green-600" />
-                        ) : (
-                          <Variable className="w-3.5 h-3.5 text-primary" />
-                        )}
-                        {displayName}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {isCreateSuggestion && (
-                          <Badge
-                            variant="secondary"
-                            className="text-xs bg-blue-100 text-blue-700 border-blue-200"
-                          >
-                            Create
-                          </Badge>
-                        )}
-                        {!isProduct && !isCreateSuggestion &&
-                          !templateVariables.some((v) => v.id === item.id) && (
-                            <Badge variant="outline" className="ml-2 text-xs">
-                              Will add to template
+                    <div className="flex flex-col">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          {isCreateSuggestion ? (
+                            <PlusCircle className="w-3.5 h-3.5 text-blue-600" />
+                          ) : isProduct ? (
+                            <Package className="w-3.5 h-3.5 text-green-600" />
+                          ) : (
+                            <Variable className="w-3.5 h-3.5 text-primary" />
+                          )}
+                          {displayName}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {isCreateSuggestion && (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-blue-100 text-blue-700 border-blue-200"
+                            >
+                              Create
                             </Badge>
                           )}
-                        {!isProduct && !isCreateSuggestion && item.is_global && (
-                          <Badge variant="secondary" className="text-xs">
-                            Global
-                          </Badge>
+                          {!isProduct && !isCreateSuggestion &&
+                            !templateVariables.some((v) => v.id === item.id) && (
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                Will add to template
+                              </Badge>
+                            )}
+                          {!isProduct && !isCreateSuggestion && item.is_global && (
+                            <Badge variant="secondary" className="text-xs">
+                              Global
+                            </Badge>
+                          )}
+                          {isProduct && (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-green-100 text-green-700 border-green-200"
+                            >
+                              Product
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      {!isProduct && !isCreateSuggestion && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {isExactMatch ? (
+                            <span className="text-xs text-green-600">Exact match</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {displayName.toLowerCase().startsWith(formulaInput.toLowerCase()) 
+                                ? `Similar to "${formulaInput}"` 
+                                : `Contains "${formulaInput}"`}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
+                        <span className="px-1.5 py-0.5 bg-muted/50 rounded">
+                          Press <span className="font-medium">Tab</span> to add
+                        </span>
+                        {isExactMatch && (
+                          <span className="px-1.5 py-0.5 bg-muted/50 rounded">
+                            Press <span className="font-medium">Enter</span> to select
+                          </span>
                         )}
-                        {isProduct && (
-                          <Badge
-                            variant="secondary"
-                            className="text-xs bg-green-100 text-green-700 border-green-200"
-                          >
-                            Product
-                          </Badge>
+                        {isCreateSuggestion && (
+                          <span className="px-1.5 py-0.5 bg-muted/50 rounded">
+                            Press <span className="font-medium">Enter</span> to create
+                          </span>
                         )}
                       </div>
                     </div>
@@ -799,28 +844,27 @@ export function FormulaBuilder({
               ) ? (
                 <div
                   className="p-3 cursor-pointer hover:bg-accent"
-                  onClick={() =>
-                    addFormulaToken(
-                      variables.find(
-                        (v) =>
-                          v.name.toLowerCase() ===
-                          formulaInput.trim().toLowerCase()
-                      )?.name || formulaInput.trim(),
-                      variables.find(
-                        (v) =>
-                          v.name.toLowerCase() ===
-                          formulaInput.trim().toLowerCase()
-                      )?.name || formulaInput.trim(),
-                      "variable"
-                    )
-                  }
+                  onClick={() => {
+                    const exactMatch = variables.find(
+                      (v) =>
+                        v.name.toLowerCase() ===
+                        formulaInput.trim().toLowerCase()
+                    );
+                    if (exactMatch) {
+                      addFormulaToken(
+                        exactMatch.name,
+                        exactMatch.name,
+                        "variable"
+                      );
+                    }
+                  }}
                 >
                   <div className="flex-1">
                     <span className="font-medium text-sm">
                       Use "{formulaInput.trim()}"
                     </span>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Press Enter to use this variable
+                      Press Enter to use this existing variable
                     </p>
                   </div>
                 </div>
@@ -831,14 +875,10 @@ export function FormulaBuilder({
                 >
                   <div className="flex-1">
                     <span className="font-medium text-sm">
-                      "{formulaInput.trim()}"
-                    </span>
-                    <span className="text-muted-foreground text-sm">
-                      {" "}
-                      doesn't exist
+                      Create new variable "{formulaInput.trim()}"
                     </span>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Click to create this variable and add to formula
+                      Press Enter to create this variable and add to formula
                     </p>
                   </div>
                   <PlusCircle className="h-4 w-4 text-muted-foreground ml-2" />

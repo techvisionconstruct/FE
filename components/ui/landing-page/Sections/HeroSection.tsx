@@ -170,7 +170,7 @@ function HeroSection() {
         </div>
 
         {/* Hero content - centered vertically & horizontally */}
-        <div className="container relative z-10 h-full flex items-center justify-center mx-auto">
+        <div className="container relative z-10 h-full flex items-center justify-center mx-auto pb-36">
           <div className="grid gap-16 md:grid-cols-2 items-center py-16 text-center md:text-left">
             {/* Left column - Value proposition */}
             <motion.div
@@ -459,37 +459,6 @@ function HeroSection() {
             </div>
           </div>
         </div>
-
-        {/* Stats bar - moved slightly up to overlap with gradient */}
-        <motion.div
-          className="relative z-10 border-t border-white/10 bg-white/5 backdrop-blur-md mt-6"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 1.2 }}
-        >
-          <div className="container py-6 mx-auto">
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              {(
-                [
-                  { label: "Contractors", value: "10,000+" },
-                  { label: "Proposals Created", value: "250,000+" },
-                  { label: "Win Rate", value: "85%" },
-                  { label: "Time Saved", value: "75%" },
-                ] as const
-              ).map((stat, index) => (
-                <motion.div
-                  key={index}
-                  className="text-center"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.1 * index + 1.6 }}
-                >
-                  <p className="text-2xl font-bold text-white">{stat.value}</p>
-                  <p className="text-sm text-white/60">{stat.label}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>        </motion.div>
       </section>
 
       {/* Video Modal */}
