@@ -1615,12 +1615,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                                                 ) +
                                                   parseFloat(
                                                     element.labor_cost || 0
-                                                  )) *
-                                                  (1 +
-                                                    parseFloat(
-                                                      element.markup || 0
-                                                    ) /
-                                                      100)
+                                                  )) 
                                               )}
                                             </span>
                                           </div>

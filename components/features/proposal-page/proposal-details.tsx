@@ -331,9 +331,7 @@ export function ProposalDetails({ proposal }: ProposalDetailsProps) {
                                         </span>                                        <span className="inline-block rounded-full bg-primary/10 px-3 py-0.5 text-xs font-medium border border-primary/20 text-primary">
                                           Total: $
                                           {((Number(element.material_cost || 0) +
-                                            Number(element.labor_cost || 0)) *
-                                            (1 + Number(element.markup || 0) / 100)).toFixed(2)}
-                                        </span>
+                                            Number(element.labor_cost || 0)))}                                        </span>
                                       </div>
                                     </div>
                                   </div>
