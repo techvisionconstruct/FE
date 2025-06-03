@@ -42,16 +42,6 @@ export default function TemplatedById() {
 
   return (
     <div className="p-0 mx-auto">
-      <div className="flex justify-between items-center mb-4">
-        <div></div> {/* Empty div for flex spacing */}
-        <Link href={`/templates/${templateId}/edit`}>
-          <Button variant="outline" size="sm" className="flex items-center gap-1">
-            <Pencil className="h-4 w-4" />
-            Edit Template
-          </Button>
-        </Link>
-      </div>
-
       <div className="w-full max-w-8xl relative left-1/2 right-1/2 -translate-x-1/2 h-48 md:h-64 mb-4">
         <Image
           src={template.image || DEFAULT_IMAGE}
@@ -61,9 +51,17 @@ export default function TemplatedById() {
           priority
         />
       </div>
-      <h2 className="text-4xl font-bold mb-2 tracking-tight leading-tight">
-        {template?.name}
-      </h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-4xl font-bold tracking-tight leading-tight">
+          {template?.name}
+        </h2>
+        <Link href={`/templates/${templateId}/edit`}>
+            <Button variant="outline" size="sm" className="flex items-center gap-1 ml-4 px-12">
+            <Pencil className="h-4 w-4" />
+            Edit
+            </Button>
+        </Link>
+      </div>
       <p className="text-lg text-muted-foreground mb-2">
         {template?.description}
       </p>

@@ -42,67 +42,73 @@ export function TemplateList({ templates, onDeleteTemplate, isDeleting }: Templa
   }
 
   return (
-    <div className="space-y-5"><div className="rounded-md border">
+    <div className="space-y-5">
+      <div className="rounded-md border overflow-hidden shadow-sm">
         {templates.map((template, index) => (
           <div
             key={template.id}
             className={cn(
-              "flex gap-4 p-4 transition-colors cursor-pointer hover:bg-accent/60 hover:shadow-xs relative",
+              "relative flex p-5 transition-colors hover:bg-accent/30",
               index !== templates.length - 1 && "border-b",
-              index % 2 === 0 && "bg-muted/50"
+              index % 2 === 0 ? "bg-background" : "bg-muted/20"
             )}
-          >            <div className="absolute top-2 right-2 z-10">
-              <TemplateDropdownMenu 
-                templateId={template.id} 
-                onDelete={handleDelete} 
+          >
+            <Link href={`/templates/${template.id}`} className="flex gap-5 flex-1 pr-10">
+              <div className="relative w-24 h-24 rounded-md overflow-hidden flex-shrink-0 border">
+                <Image
+                  src={template.image || DEFAULT_IMAGE}
+                  alt={`${template.name} thumbnail`}
+                  fill
+                  className="object-cover"
+                />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-medium mb-1">{template.name}</h3>
+                <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                  {template.description}
+                </p>
+
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {template.trades?.slice(0, 3).map((trade) => (
+                    <Badge key={trade.id} variant="secondary" className="text-xs">
+                      {trade.name}
+                    </Badge>
+                  ))}
+                  {template.trades && template.trades.length > 3 && (
+                    <Badge variant="secondary" className="text-xs">
+                      +{template.trades.length - 3} more
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {template.variables?.slice(0, 3).map((variable) => (
+                    <Badge key={variable.id} variant="outline" className="text-xs">
+                      {variable.name}
+                    </Badge>
+                  ))}
+                  {template.variables && template.variables.length > 3 && (
+                    <Badge variant="outline" className="text-xs">
+                      +{template.variables.length - 3} more
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-sm text-muted-foreground whitespace-nowrap">
+                {format(new Date(template.updated_at), "MM/dd/yyyy")}
+              </div>
+            </Link>
+
+            {/* Positioned dropdown menu */}
+            <div className="absolute top-4 right-4">
+              <TemplateDropdownMenu
+                templateId={template.id}
+                onDelete={handleDelete}
                 isDeleting={isDeleting}
               />
             </div>
-            <Link href={`/templates/${template.id}`} className="flex gap-4 flex-1">
-              <Image
-              src={template.image || DEFAULT_IMAGE}
-              alt={`${template.name} thumbnail`}
-              width={40}
-              height={60}
-              className="w-20 h-30 object-cover rounded flex-shrink-0"
-            />
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold">{template.name}</h3>
-              <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
-                {template.description}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {template.trades?.slice(0, 3).map((trade) => (
-                  <Badge
-                    key={trade.id}
-                    variant="secondary"
-                    className="text-xs"
-                  >
-                    {trade.name}
-                  </Badge>
-                ))}
-                {template.trades && template.trades.length > 3 && (
-                  <Badge variant="secondary" className="text-xs">
-                    +{template.trades.length - 3} more
-                  </Badge>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {template.variables?.slice(0, 3).map((variable) => (
-                  <Badge key={variable.id} variant="outline" className="text-xs">
-                    {variable.name}
-                  </Badge>
-                ))}
-                {template.variables && template.variables.length > 3 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{template.variables.length - 3} more
-                  </Badge>
-                )}
-              </div>            </div>
-            <div className="text-sm text-muted-foreground whitespace-nowrap">
-              {format(new Date(template.updated_at), "MMM d, yyyy")}
-            </div>
-            </Link>
           </div>
         ))}
       </div>
