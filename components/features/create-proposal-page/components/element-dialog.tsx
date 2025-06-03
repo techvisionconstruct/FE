@@ -110,8 +110,7 @@ export function ElementDialog({
       variable && (variable.is_global || variable.origin === "derived")
     );
   }, [variables]);
-  
-  const {
+    const {
     materialFormulaTokens,
     setMaterialFormulaTokens,
     laborFormulaTokens,
@@ -120,11 +119,40 @@ export function ElementDialog({
     parseFormulaToTokens,
     tokensToFormulaString,
     replaceVariableIdsWithNames,
+    replaceIdsWithNamesInFormula,
   } = useFormula();
-
   // Add state for formula validation errors
   const [materialFormulaError, setMaterialFormulaError] = useState<string | null>(null);
   const [laborFormulaError, setLaborFormulaError] = useState<string | null>(null);
+
+  // Calculate dynamic dialog width based on formula content length
+  const calculateDialogWidth = useMemo(() => {
+    const maxTokenLength = Math.max(
+      ...materialFormulaTokens.map(token => (token.displayText || token.text).length),
+      ...laborFormulaTokens.map(token => (token.displayText || token.text).length),
+      0
+    );
+    
+    const tokenCount = Math.max(materialFormulaTokens.length, laborFormulaTokens.length);
+    
+    // Base width for small content
+    if (maxTokenLength <= 20 && tokenCount <= 5) {
+      return "sm:max-w-4xl"; // Default size
+    }
+    
+    // Medium width for moderate content
+    if (maxTokenLength <= 40 && tokenCount <= 10) {
+      return "sm:max-w-5xl";
+    }
+    
+    // Large width for extensive content
+    if (maxTokenLength <= 60 && tokenCount <= 15) {
+      return "sm:max-w-6xl";
+    }
+    
+    // Extra large for very long product names or many tokens
+    return "sm:max-w-7xl";
+  }, [materialFormulaTokens, laborFormulaTokens]);
 
   // Local storage helper functions
   const saveFormulasToStorage = () => {
@@ -213,54 +241,50 @@ export function ElementDialog({
       } else if (elementToEdit) {
         // Initialize from element to edit
         let materialTokens = [],
-          laborTokens = [];
-
-        if (elementToEdit.material_cost_formula) {
-          // For variables, we want to display names instead of IDs for better user experience
-          let displayFormula = replaceVariableIdsWithNames(
+          laborTokens = [];        if (elementToEdit.material_cost_formula) {
+          // Use enhanced function to replace IDs with names, including products
+          let displayFormula = replaceIdsWithNamesInFormula(
             elementToEdit.material_cost_formula,
             filteredVariables,
-            elementToEdit.material_formula_variables || []
+            elementToEdit.material_formula_variables || [],
+            productsData?.data
           );
 
-          materialTokens = parseFormulaToTokens(displayFormula);
-
-          materialTokens = materialTokens.map((token) => {
+          materialTokens = parseFormulaToTokens(displayFormula);materialTokens = materialTokens.map((token) => {
+            // First check if this token is a product in formula variables
             if (
               elementToEdit.material_formula_variables &&
               elementToEdit.material_formula_variables.length > 0
             ) {
-              const productVariable =
-                elementToEdit.material_formula_variables.find(
-                  (variable: any) =>
-                    (variable.name === token.text ||
-                      variable.name === token.displayText) &&
-                    variable.type === "product"
-                );
+              // Check if this token ID matches a product from the products API
+              const matchedProduct = productsData?.data?.find(
+                (product: ProductResponse) => product.id === token.text
+              );
 
-              if (productVariable) {
+              if (matchedProduct) {
                 return {
                   ...token,
                   type: "product" as const,
-                  text: productVariable.id,
-                  displayText: `${productVariable.name || token.text}`,
+                  text: matchedProduct.id,
+                  displayText: matchedProduct.title,
                 };
               }
-            }
 
-            const matchedProduct = productsData?.data?.find(
-              (product: ProductResponse) =>
-                product.title.toLowerCase() === token.text.toLowerCase() ||
-                token.text.includes(product.id)
-            );
+              // Check if token text matches a product name
+              const productByName = productsData?.data?.find(
+                (product: ProductResponse) =>
+                  product.title.toLowerCase() === token.text.toLowerCase() ||
+                  product.title.toLowerCase() === token.displayText?.toLowerCase()
+              );
 
-            if (matchedProduct) {
-              return {
-                ...token,
-                type: "product" as const,
-                text: matchedProduct.id,
-                displayText: `${matchedProduct.title}`,
-              };
+              if (productByName) {
+                return {
+                  ...token,
+                  type: "product" as const,
+                  text: productByName.id,
+                  displayText: productByName.title,
+                };
+              }
             }
 
             return token;
@@ -273,28 +297,52 @@ export function ElementDialog({
           );
         } else {
           setMaterialFormulaTokens([]);
-        }
-
-        if (elementToEdit.labor_cost_formula) {
-          // For variables, we want to display names instead of IDs for better user experience
-          let displayFormula = replaceVariableIdsWithNames(
+        }        if (elementToEdit.labor_cost_formula) {
+          // Use enhanced function to replace IDs with names, including products
+          let displayFormula = replaceIdsWithNamesInFormula(
             elementToEdit.labor_cost_formula,
             filteredVariables,
-            elementToEdit.labor_formula_variables || []
+            elementToEdit.labor_formula_variables || [],
+            productsData?.data
           );
 
-          laborTokens = parseFormulaToTokens(displayFormula);
-
-          laborTokens = laborTokens.map((token) => {
+          laborTokens = parseFormulaToTokens(displayFormula);laborTokens = laborTokens.map((token) => {
+            // First check if this token is a product in formula variables
             if (
-              token.displayText?.startsWith("product:") &&
-              token.type !== "product"
+              elementToEdit.labor_formula_variables &&
+              elementToEdit.labor_formula_variables.length > 0
             ) {
-              return {
-                ...token,
-                type: "product" as const,
-              };
+              // Check if this token ID matches a product from the products API
+              const matchedProduct = productsData?.data?.find(
+                (product: ProductResponse) => product.id === token.text
+              );
+
+              if (matchedProduct) {
+                return {
+                  ...token,
+                  type: "product" as const,
+                  text: matchedProduct.id,
+                  displayText: matchedProduct.title,
+                };
+              }
+
+              // Check if token text matches a product name
+              const productByName = productsData?.data?.find(
+                (product: ProductResponse) =>
+                  product.title.toLowerCase() === token.text.toLowerCase() ||
+                  product.title.toLowerCase() === token.displayText?.toLowerCase()
+              );
+
+              if (productByName) {
+                return {
+                  ...token,
+                  type: "product" as const,
+                  text: productByName.id,
+                  displayText: productByName.title,
+                };
+              }
             }
+
             return token;
           });
 
@@ -321,15 +369,14 @@ export function ElementDialog({
           saveFormulasToStorage();
         }, 100);
       }
-    }
-  }, [
+    }  }, [
     isOpen,
     elementToEdit,
     initialName,
     initialMarkup,
     filteredVariables,
     parseFormulaToTokens,
-    replaceVariableIdsWithNames,
+    replaceIdsWithNamesInFormula,
     productsData?.data,
     setLaborFormulaTokens,
     setMaterialFormulaTokens
@@ -626,7 +673,7 @@ export function ElementDialog({
       }
       onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className={`${calculateDialogWidth} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <BracesIcon className="mr-2 h-4 w-4" />
