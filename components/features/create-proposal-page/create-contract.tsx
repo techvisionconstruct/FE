@@ -41,9 +41,11 @@ import {
   X,
   Check,
   Loader2,
+  ImageIcon,
 } from "lucide-react";
 import { ContractCreateRequest } from "@/types/contracts/dto";
 import { getContract } from "@/query-options/contracts";
+import Image from "next/image";
 
 interface TermSection {
   isNew?: boolean;
@@ -1580,17 +1582,25 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                               key={trade.id}
                               className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
                             >
-                              {" "}
-                              <div className="flex items-center gap-3 mb-4">
-                                {trade.image && (
-                                  <div className="h-10 w-10 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
-                                    <img
+                              {" "}                              <div className="flex items-center gap-3 mb-4">
+                                {/* Trade image */}
+                                <div className="w-10 h-10 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 relative">
+                                  {trade.image ? (
+                                    <Image
                                       src={trade.image}
                                       alt={trade.name || "Trade"}
-                                      className="h-full w-full object-cover"
+                                      fill
+                                      className="object-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                      }}
                                     />
-                                  </div>
-                                )}
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                                    </div>
+                                  )}
+                                </div>
                                 <div className="h-6 w-1 bg-primary rounded-full"></div>
                                 <h4 className="font-medium">
                                   {trade.name || "Trade Name"}
@@ -1603,18 +1613,25 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                                       key={element.id}
                                       className="bg-gray-50 rounded-md p-3 border border-gray-100 hover:border-primary/20 transition-colors"
                                     >
-                                      {" "}
-                                      <div className="flex items-start gap-3 mb-1">
-                                        {" "}
-                                        {element.image && (
-                                          <div className="h-11 w-11 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
-                                            <img
+                                      {" "}                                      <div className="flex items-start gap-3 mb-1">
+                                        {/* Element image */}
+                                        <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 relative">
+                                          {element.image ? (
+                                            <Image
                                               src={element.image}
                                               alt={element.name || "Element"}
-                                              className="h-full w-full object-cover"
+                                              fill
+                                              className="object-cover"
+                                              onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                              }}
                                             />
-                                          </div>
-                                        )}
+                                          ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                              <ImageIcon className="h-3 w-3 text-muted-foreground/50" />
+                                            </div>
+                                          )}
+                                        </div>
                                         <div className="flex-1">
                                           <div className="flex justify-between items-center">
                                             <h5 className="font-medium text-sm">
