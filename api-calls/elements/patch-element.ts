@@ -2,13 +2,13 @@ import { ElementUpdateRequest } from "@/types/elements/dto";
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const TOKEN = Cookies.get("auth-token");
 
 export async function patchElement(
   elementId: string,
   element: Partial<ElementUpdateRequest>
 ) {
   try {
+    const TOKEN = Cookies.get('auth-token');
     // Only include fields that are provided (not undefined)
     const payload = Object.fromEntries(
       Object.entries(element).filter(([_, value]) => value !== undefined)

@@ -4,11 +4,10 @@ import { ContractSignRequest } from "@/types/contracts/dto";
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const getAuthToken = () => Cookies.get('auth-token');
 
 export const clientSignContract = async (id: string, signatureData: ContractSignRequest) => {
   try {
-    const token = getAuthToken();
+ 
     
     const payload: Record<string, any> = {};
     
@@ -18,7 +17,6 @@ export const clientSignContract = async (id: string, signatureData: ContractSign
     const response = await fetch(`${API_URL}/v1/contracts/sign/${id}/`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload)

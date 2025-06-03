@@ -3,16 +3,15 @@
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const getAuthToken = () => Cookies.get('auth-token');
 
 export const deleteProposal = async (id: string) => {
-  const token = getAuthToken();
+  const TOKEN = Cookies.get('auth-token');
   
   try {
     const res = await fetch(`${API_URL}/v1/proposals/delete/${id}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${TOKEN}`,
         'Content-Type': 'application/json'
       }
     });

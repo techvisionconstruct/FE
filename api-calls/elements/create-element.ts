@@ -1,15 +1,12 @@
-
-
-import {
-  ElementCreateRequest,
-} from "@/types/elements/dto";
+import { ElementCreateRequest } from "@/types/elements/dto";
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const TOKEN = Cookies.get("auth-token");
 
 export async function createElement(element: ElementCreateRequest) {
-  try {    const payload: Record<string, any> = {};
+  try {
+    const TOKEN = Cookies.get('auth-token');
+    const payload: Record<string, any> = {};
     if (element.name) payload.name = element.name;
     if (element.description) payload.description = element.description;
     if (element.image !== undefined) payload.image = element.image;
