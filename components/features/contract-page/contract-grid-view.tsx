@@ -98,12 +98,11 @@ export function ContractGridView({
             : undefined;
 
         return (
-          <div
+          <Card
             key={contract.uuid}
-            className="group cursor-pointer"
+            className="h-full overflow-hidden hover:shadow-md transition-all group cursor-pointer"
             onClick={() => handleClick(contract)}
           >
-            <Card className="h-full overflow-hidden hover:shadow-md transition-all">
               <CardHeader className="p-4 pb-3">
                 <div className="flex justify-between items-start">
                   <div className="w-full">
@@ -217,7 +216,6 @@ export function ContractGridView({
                 </Button>
               </CardFooter>
             </Card>
-          </div>
         );
       })}
     </div>
