@@ -1862,9 +1862,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
             }
           });
         }
-      });
-
-      // Step 1: Update variable first and wait for completion using direct API call
+      });      // Step 1: Update variable first and wait for completion using direct API call
       console.log('Updating variable in edit dialog first:', currentVariableId, variableData);
       const variableResponse = await updateVariable(currentVariableId, variableData);
       console.log('Variable updated successfully in edit dialog:', variableResponse);
@@ -1872,16 +1870,92 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       // Invalidate variables query to ensure fresh data
       queryClient.invalidateQueries({ queryKey: ["variables"] });
 
-      // Step 2: Update dependent elements sequentially after variable update completes
-      if (elementsToUpdate.length > 0) {
-        console.log(`Updating ${elementsToUpdate.length} dependent elements after variable edit...`);
+      // Step 2: Update ALL elements to ensure product-based formulas are refreshed too
+      // Count elements to update
+      let elementCount = 0;
+      trades.forEach(trade => {
+        if (trade.elements?.length) {
+          elementCount += trade.elements.length;
+        }
+      });
+      
+      if (elementCount === 0) {
+        toast.success("Variable updated successfully");
         
-        const responses = await Promise.all(
-          elementsToUpdate.map(({ elementId, data }) => {
-            console.log('Updating element in edit dialog:', elementId);
-            return patchElement(elementId, data);
-          })
-        );        console.log('All elements updated successfully in edit dialog:', responses.length);        // Invalidate queries after all elements are updated
+        // Still invalidate queries even if no elements exist
+        queryClient.invalidateQueries({ queryKey: ["elements"] });
+        queryClient.invalidateQueries({ queryKey: ["trades"] });
+        queryClient.invalidateQueries({ queryKey: ["product"] });
+        
+        // Force cost recalculation
+        setCostUpdateTrigger(prev => prev + 1);
+        return;
+      }
+      
+      const loadingToast = toast.loading(`Updating ${elementCount} elements after variable change...`, {
+        position: "top-center"
+      });
+      
+      // Create a set of element IDs to show loading state
+      const allElementIds = new Set(
+        trades.flatMap(trade => 
+          (trade.elements || []).map(element => element.id)
+        )
+      );
+      setUpdatingElementCosts(allElementIds);
+      
+      const updatePromises: Promise<{tradeId: string, updatedElement: any}>[] = [];
+      
+      trades.forEach(trade => {
+        trade.elements?.forEach(element => {
+          if (!element || !element.id) return; // Skip invalid elements
+          
+          // Create a complete element update with all required fields - passing 1:1 the same data
+          const elementData = {
+            name: element.name,
+            description: element.description || undefined,
+            image: element.image || undefined,
+            material_cost_formula: element.material_cost_formula || undefined,
+            labor_cost_formula: element.labor_cost_formula || undefined,
+            markup: element.markup || 0,
+            material_formula_variables: element.material_formula_variables || [],
+            labor_formula_variables: element.labor_formula_variables || [],
+            origin: element.origin || 'derived'
+          };
+          
+          // Add this update to our promises array
+          updatePromises.push(
+            patchElement(element.id, elementData)
+              .then(response => ({
+                tradeId: trade.id,
+                updatedElement: response.data
+              }))
+              .catch(error => {
+                console.error(`Error updating element ${element.id}:`, error);
+                throw error;
+              })
+          );
+        });
+      });
+
+      try {
+        const results = await Promise.all(updatePromises);
+        console.log(`Successfully updated ${results.length} elements after variable change`);
+        
+        const updatedTrades = trades.map(trade => ({
+          ...trade,
+          elements: trade.elements?.map(element => {
+            const result = results.find(r => 
+              r.tradeId === trade.id && 
+              r.updatedElement.id === element.id
+            );
+            return result ? result.updatedElement : element;
+          }) || []
+        }));
+        
+        updateTrades(updatedTrades);
+        
+        // Invalidate queries after all elements are updated
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
         queryClient.invalidateQueries({ queryKey: ["product"] });
@@ -1889,22 +1963,21 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         // Force cost recalculation
         setCostUpdateTrigger(prev => prev + 1);
         
-        toast.success(`Variable updated and ${elementsToUpdate.length} dependent elements refreshed`, {
+        toast.dismiss(loadingToast);
+        toast.success(`Updated variable and ${results.length} elements`, {
           position: "top-center",
-          description: `All changes have been saved successfully.`
+          description: `All element costs have been refreshed.`
         });
-      } else {        // Still invalidate queries even if no elements need updates
+      } catch (error) {
+        toast.dismiss(loadingToast);
+        console.error('Error updating elements after variable change:', error);
+        
+        // Still invalidate queries and force recalculation
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
         queryClient.invalidateQueries({ queryKey: ["product"] });
-        
-        // Force cost recalculation
         setCostUpdateTrigger(prev => prev + 1);
-        
-        toast.success("Variable updated successfully", {
-          position: "top-center",
-          description: `Variable "${editVariableName}" has been saved.`
-        });
+          toast.error('Failed to update all elements, but variable was updated');
       }
 
       setShowEditVariableDialog(false);
@@ -1921,6 +1994,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       });
     } finally {
       setIsUpdatingVariable(false);
+      setUpdatingElementCosts(new Set());
     }
   };
   const handleOpenEditDialog = (element: ElementResponse) => {

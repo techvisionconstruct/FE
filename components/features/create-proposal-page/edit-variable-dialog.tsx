@@ -20,6 +20,7 @@ import {
 import { BracesIcon, Loader2, Calculator, X } from "lucide-react";
 import { FormulaBuilder } from "./components/formula-builder";
 import { useFormula } from "./hooks/use-formula";
+import { toast } from "sonner";
 
 interface VariableType {
   id: string;
@@ -273,8 +274,7 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
         <DialogFooter>
           <Button variant="outline" onClick={onCancel}>
             Cancel
-          </Button>
-          <Button
+          </Button>          <Button
             onClick={() => {
               if (variableName.trim()) {
                 if (showFormulaBuilder && formulaTokens.length > 0) {
@@ -289,6 +289,9 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
                   setVariableFormula(idFormula);
                 }
                 
+                // We don't show toast here since it will be handled in onEditVariable
+                // which triggers the parent component's handleEditVariable function
+                // that already shows a toast when the update is successful
                 onEditVariable();
               }
             }}
