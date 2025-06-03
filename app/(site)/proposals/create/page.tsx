@@ -489,10 +489,6 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                   variant="outline"
                   className="mb-4"
                   onClick={() => {
-                    if (!validateVariables()) {
-                      setShowMissingVariablesDialog(true); // Show dialog if validation fails
-                      return;
-                    }
                     sendProposalToClient();
                   }}
                   disabled={
@@ -723,7 +719,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
       </Card>
 
       {/* Missing Variables Dialog */}
-      <Dialog
+      {/* <Dialog
         open={showMissingVariablesDialog}
         onOpenChange={setShowMissingVariablesDialog}
       >
@@ -794,7 +790,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
     </div>
   );
 }

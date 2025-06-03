@@ -66,6 +66,7 @@ interface EditableFieldProps {
   placeholder?: string;
   label?: string;
   tooltip?: string;
+  disabled?: boolean;
 }
 
 interface EditableClientFieldProps {
@@ -74,6 +75,7 @@ interface EditableClientFieldProps {
   onChange: (value: string) => void;
   onSave?: () => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 // Editable Field Component
@@ -85,6 +87,7 @@ const EditableField: React.FC<EditableFieldProps> = ({
   placeholder = "Enter text here",
   label,
   tooltip,
+  disabled = false,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value);
@@ -95,7 +98,14 @@ const EditableField: React.FC<EditableFieldProps> = ({
   // Update temp value when prop value changes
   useEffect(() => {
     setTempValue(value);
-  }, [value]);  // Handle clicks outside the textarea to save
+  }, [value]);
+
+  // Reset editing state when disabled
+  useEffect(() => {
+    if (disabled && isEditing) {
+      setIsEditing(false);
+    }
+  }, [disabled, isEditing]);  // Handle clicks outside the textarea to save
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (skipNextOutsideClick.current) {
@@ -203,16 +213,22 @@ const EditableField: React.FC<EditableFieldProps> = ({
     <div className="space-y-1 w-full">
       {label && <Label className="mb-1 block">{label}</Label>}
       <div
-        className="p-3 rounded-md hover:bg-muted/20 cursor-pointer relative group transition-all"
-        onClick={() => setIsEditing(true)}
-        title={tooltip || "Click to edit"}
+        className={`p-3 rounded-md ${
+          disabled 
+            ? "bg-muted/10 text-muted-foreground cursor-not-allowed" 
+            : "hover:bg-muted/20 cursor-pointer"
+        } relative group transition-all`}
+        onClick={() => !disabled && setIsEditing(true)}
+        title={disabled ? "Contract is signed - editing disabled" : (tooltip || "Click to edit")}
       >
         <div className="whitespace-pre-line">{value || placeholder}</div>
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-            <Edit className="h-4 w-4" />
-          </Button>
-        </div>
+        {!disabled && (
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+              <Edit className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -223,7 +239,8 @@ const ServiceAgreementTitleField: React.FC<{
   value: string;
   onChange: (value: string) => void;
   onSave?: () => void;
-}> = ({ value, onChange, onSave }) => {
+  disabled?: boolean;
+}> = ({ value, onChange, onSave, disabled = false }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value);
   const [isSaving, setIsSaving] = useState(false);
@@ -234,6 +251,13 @@ const ServiceAgreementTitleField: React.FC<{
   useEffect(() => {
     setTempValue(value);
   }, [value]);
+
+  // Reset editing state when disabled
+  useEffect(() => {
+    if (disabled && isEditing) {
+      setIsEditing(false);
+    }
+  }, [disabled, isEditing]);
 
   // Handle clicks outside to save
   useEffect(() => {
@@ -336,11 +360,18 @@ const ServiceAgreementTitleField: React.FC<{
 
   return (
     <h1
-      className="text-3xl font-bold mt-2 mb-8 uppercase text-center group relative cursor-pointer hover:text-primary transition-colors"
-      onClick={() => setIsEditing(true)}
+      className={`text-3xl font-bold mt-2 mb-8 uppercase text-center group relative ${
+        disabled 
+          ? "text-muted-foreground cursor-not-allowed" 
+          : "cursor-pointer hover:text-primary"
+      } transition-colors`}
+      onClick={() => !disabled && setIsEditing(true)}
+      title={disabled ? "Contract is signed - editing disabled" : "Click to edit"}
     >
       {value}
-      <Edit className="h-4 w-4 absolute -right-6 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
+      {!disabled && (
+        <Edit className="h-4 w-4 absolute -right-6 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
+      )}
     </h1>
   );
 };
@@ -352,6 +383,7 @@ const EditableClientField: React.FC<EditableClientFieldProps> = ({
   onChange,
   onSave,
   placeholder = "Enter information",
+  disabled = false,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value);
@@ -362,7 +394,16 @@ const EditableClientField: React.FC<EditableClientFieldProps> = ({
   // Update temp value when prop value changes
   useEffect(() => {
     setTempValue(value);
-  }, [value]);  // Handle clicks outside to save
+  }, [value]);
+
+  // Reset editing state when disabled
+  useEffect(() => {
+    if (disabled && isEditing) {
+      setIsEditing(false);
+    }
+  }, [disabled, isEditing]);
+
+  // Handle clicks outside to save
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (skipNextOutsideClick.current) {
@@ -470,11 +511,18 @@ const EditableClientField: React.FC<EditableClientFieldProps> = ({
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground">{label}</p>
       <p
-        className="font-medium cursor-pointer flex items-center justify-between group transition-colors hover:text-primary rounded px-2 py-1 -mx-2 hover:bg-muted/20"
-        onClick={() => setIsEditing(true)}
+        className={`font-medium flex items-center justify-between group transition-colors rounded px-2 py-1 -mx-2 ${
+          disabled 
+            ? "text-muted-foreground cursor-not-allowed" 
+            : "cursor-pointer hover:text-primary hover:bg-muted/20"
+        }`}
+        onClick={() => !disabled && setIsEditing(true)}
+        title={disabled ? "Contract is signed - editing disabled" : "Click to edit"}
       >
         <span>{value || placeholder}</span>
-        <Edit className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
+        {!disabled && (
+          <Edit className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
+        )}
       </p>
     </div>
   );
@@ -1003,9 +1051,10 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
     index: number;
     onRemove: () => void;
     onSave: () => void;
-  }> = ({ section, index, onRemove, onSave }) => {
+    disabled?: boolean;
+  }> = ({ section, index, onRemove, onSave, disabled = false }) => {
     const [isEditing, setIsEditing] = useState(
-      editingTermSectionId === section.id
+      editingTermSectionId === section.id && !disabled
     );
     const [title, setTitle] = useState(section.title);
     const [description, setDescription] = useState(section.description);
@@ -1015,8 +1064,8 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
     const skipNextOutsideClick = useRef(false);
 
     useEffect(() => {
-      setIsEditing(editingTermSectionId === section.id);
-    }, [editingTermSectionId, section.id]);
+      setIsEditing(editingTermSectionId === section.id && !disabled);
+    }, [editingTermSectionId, section.id, disabled]);
 
     // Handle clicks outside to save - improved to avoid saving when editing text
     useEffect(() => {
@@ -1151,21 +1200,24 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
 
     return (
       <div
-        className="cursor-pointer"
-        onClick={() => setEditingTermSectionId(section.id)}
+        className={`${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+        onClick={() => !disabled && setEditingTermSectionId(section.id)}
+        title={disabled ? "Contract is signed - editing disabled" : "Click to edit"}
       >
         <div className="flex items-baseline justify-between mb-2 group">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-full border border-primary/30 flex items-center justify-center flex-shrink-0 text-primary bg-primary/5">
               <span className="text-xs font-bold">{index + 1}</span>
             </div>
-            <h5 className="text-base font-bold uppercase tracking-wide text-slate-700">
+            <h5 className={`text-base font-bold uppercase tracking-wide ${disabled ? "text-muted-foreground" : "text-slate-700"}`}>
               {section.title}
             </h5>
           </div>
-          <Edit className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
+          {!disabled && (
+            <Edit className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
+          )}
         </div>
-        <div className="ml-10 text-sm text-slate-600 leading-relaxed">
+        <div className={`ml-10 text-sm leading-relaxed ${disabled ? "text-muted-foreground" : "text-slate-600"}`}>
           {section.description}
         </div>
       </div>
@@ -1341,6 +1393,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                   value={serviceAgreementTitle}
                   onChange={setServiceAgreementTitle}
                   onSave={saveServiceAgreement}
+                  disabled={isContractSigned}
                 />
               </div>
 
@@ -1352,6 +1405,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                 textareaHeight="min-h-[300px]"
                 placeholder="Enter service agreement content"
                 tooltip="Click to edit agreement content"
+                disabled={isContractSigned}
               />
             </div>
 
@@ -1370,6 +1424,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                       onChange={setContractName}
                       onSave={saveContractInfoChanges}
                       placeholder="Enter project name"
+                      disabled={isContractSigned}
                     />
                   </div>
                   <div>
@@ -1382,6 +1437,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                       onSave={saveContractInfoChanges}
                       textareaHeight="min-h-[100px]"
                       placeholder="Enter project description"
+                      disabled={isContractSigned}
                     />
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
@@ -1418,6 +1474,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                         onChange={setClientName}
                         onSave={saveClientInfoChanges}
                         placeholder="Enter client name"
+                        disabled={isContractSigned}
                       />
                       <EditableClientField
                         label="Email"
@@ -1425,6 +1482,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                         onChange={setClientEmail}
                         onSave={saveClientInfoChanges}
                         placeholder="Enter email address"
+                        disabled={isContractSigned}
                       />
                       <EditableClientField
                         label="Phone"
@@ -1432,6 +1490,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                         onChange={setClientPhone}
                         onSave={saveClientInfoChanges}
                         placeholder="Enter phone number"
+                        disabled={isContractSigned}
                       />
                       <EditableClientField
                         label="Address"
@@ -1439,6 +1498,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                         onChange={setClientAddress}
                         onSave={saveClientInfoChanges}
                         placeholder="Enter address"
+                        disabled={isContractSigned}
                       />
                     </CardContent>
                   </Card>
@@ -1684,14 +1744,16 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                     <h3 className="text-lg font-semibold">
                       Terms and Conditions
                     </h3>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={addTermsSection}
-                      className="flex items-center gap-1"
-                    >
-                      <Plus className="h-4 w-4" /> Add Section
-                    </Button>
+                    {!isContractSigned && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addTermsSection}
+                        className="flex items-center gap-1"
+                      >
+                        <Plus className="h-4 w-4" /> Add Section
+                      </Button>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -1705,11 +1767,12 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                           index={index}
                           onRemove={() => removeTermsSection(section.id)}
                           onSave={saveTerms}
+                          disabled={isContractSigned}
                         />
                       </div>
                     ))}
 
-                    {termsSections.length === 0 && (
+                    {termsSections.length === 0 && !isContractSigned && (
                       <div className="text-center py-8 border border-dashed rounded-lg">
                         <p className="text-muted-foreground">
                           No terms and conditions added yet
@@ -1722,6 +1785,13 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                         >
                           Add Your First Section
                         </Button>
+                      </div>
+                    )}
+                    {termsSections.length === 0 && isContractSigned && (
+                      <div className="text-center py-8 border border-dashed rounded-lg">
+                        <p className="text-muted-foreground">
+                          No terms and conditions added
+                        </p>
                       </div>
                     )}
                   </div>

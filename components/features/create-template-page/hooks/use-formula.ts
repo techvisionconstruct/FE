@@ -193,7 +193,6 @@ export function useFormula() {
     },
     []
   );
-
   // Replace variable IDs with names in formula
   const replaceVariableIdsWithNames = useCallback(
     (
@@ -221,6 +220,67 @@ export function useFormula() {
         /\{([a-zA-Z0-9_-]+)\}/g,
         (match, id) => {
           const variable = variableList.find((v) => v.id === id);
+          return variable ? `{${variable.name}}` : match;
+        }
+      );
+
+      return displayFormula;
+    },
+    []
+  );
+
+  // Replace variable and product IDs with names in formula, using formula variables
+  const replaceIdsWithNamesInFormula = useCallback(
+    (
+      formula: string,
+      variableList: VariableResponse[],
+      formulaVars: Record<string, any>[] = [],
+      productsData?: any[]
+    ): string => {
+      if (!formula) return formula;
+
+      let displayFormula = formula;
+
+      // Replace using formula variables first (these contain both variables and products)
+      formulaVars.forEach((item) => {
+        const itemId = item.id;
+        let itemName = item.name;
+
+        // Check if this is a product by matching against products data
+        if (productsData && itemId) {
+          const matchedProduct = productsData.find((product: any) => product.id === itemId);
+          if (matchedProduct) {
+            itemName = matchedProduct.title;
+          }
+        }
+
+        // If not found in products, check variables
+        if (!itemName && variableList) {
+          const variable = variableList.find((v) => v.id === itemId);
+          itemName = variable?.name || itemId;
+        }
+
+        // Replace all occurrences of {id} with {name}
+        if (itemId && itemName) {
+          const idPattern = new RegExp(`\\{${itemId}\\}`, "g");
+          displayFormula = displayFormula.replace(idPattern, `{${itemName}}`);
+        }
+      });
+
+      // Fallback: try direct replacement for any remaining IDs
+      displayFormula = displayFormula.replace(
+        /\{([a-zA-Z0-9_-]+)\}/g,
+        (match, id) => {
+          // First check products
+          if (productsData) {
+            const product = productsData.find((p: any) => p.id === id);
+            if (product) {
+              return `{${product.title}}`;
+            }
+          }
+
+          // Then check variables
+          const variable = variableList?.find((v) => v.id === id);
           return variable ? `{${variable.name}}` : match;
         }
       );
@@ -263,7 +323,6 @@ export function useFormula() {
     },
     [isNumeric]
   );
-
   return {
     materialFormulaTokens,
     setMaterialFormulaTokens,
@@ -278,6 +337,7 @@ export function useFormula() {
     tokensToFormulaString,
     replaceVariableNamesWithIds,
     replaceVariableIdsWithNames,
+    replaceIdsWithNamesInFormula,
     isVariableInFormula,
     isNumeric,
     shouldBeVariable,

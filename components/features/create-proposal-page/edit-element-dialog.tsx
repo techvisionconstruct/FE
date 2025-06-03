@@ -61,10 +61,10 @@ const EditElementDialog: React.FC<EditElementDialogProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       }).then((res) => res.json());
-    },
-    onSuccess: () => {
+    },    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["elements"] });
       queryClient.invalidateQueries({ queryKey: ["trades"] });
+      queryClient.invalidateQueries({ queryKey: ["product"] });
     },
   });
   const handleSubmit = (data: {
