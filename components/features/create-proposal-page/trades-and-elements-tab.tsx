@@ -84,10 +84,16 @@ const extractFormulaVariables = (formula: string): Record<string, any>[] => {
   });
 };
 
-const calculateFormulaValue = (formula: string, variables: VariableResponse[]): number | null => {
+// Enhanced calculation function that handles both variables and products
+const calculateFormulaValue = (
+  formula: string, 
+  variables: VariableResponse[], 
+  formulaVariables?: Record<string, any>[]
+): number | null => {
   if (!formula) return null;
 
   try {
+    // Create a map of values from variables
     const variableValues: Record<string, number> = {};
     variables.forEach(variable => {
       if (variable.id) {
@@ -95,15 +101,37 @@ const calculateFormulaValue = (formula: string, variables: VariableResponse[]): 
       }
     });
 
+    // Add values from formula variables (which includes both variables and products)
+    const formulaValues: Record<string, number> = {};
+    if (formulaVariables) {
+      formulaVariables.forEach(item => {
+        // Handle both variable and product formats from backend
+        const itemId = item.id || item.variable_id || item.product_id;
+        const itemValue = item.value || item.cost || 0;
+        
+        if (itemId) {
+          formulaValues[itemId] = typeof itemValue === 'number' ? itemValue : 0;
+        }
+      });
+    }
+
     let evalFormula = formula;
     const matches = formula.match(/\{([^}]+)\}/g) || [];
     
     for (const match of matches) {
-      const variableId = match.slice(1, -1);
-      const variableValue = variableValues[variableId];
+      const itemId = match.slice(1, -1);
       
-      if (variableValue !== undefined) {
-        evalFormula = evalFormula.replace(match, variableValue.toString());
+      // First check formula variables (includes both variables and products)
+      let itemValue = formulaValues[itemId];
+      
+      // If not found, check regular variables
+      if (itemValue === undefined) {
+        itemValue = variableValues[itemId];
+      }
+      
+      // Replace with value or 0 if not found
+      if (itemValue !== undefined) {
+        evalFormula = evalFormula.replace(match, itemValue.toString());
       } else {
         evalFormula = evalFormula.replace(match, "0");
       }
@@ -131,7 +159,11 @@ const useMemoizedElementCosts = (elements: ElementResponse[], variables: Variabl
       // If there's a formula, calculate base cost and apply markup
       // If there's no formula, use backend value (which already includes markup)
       if (element.material_cost_formula) {
-        const baseMaterialCost = calculateFormulaValue(element.material_cost_formula, variables) || 0;
+        const baseMaterialCost = calculateFormulaValue(
+          element.material_cost_formula, 
+          variables,
+          element.material_formula_variables
+        ) || 0;
         const markupMultiplier = 1 + ((element.markup || 0) / 100);
         materialCost = baseMaterialCost * markupMultiplier;
       } else {
@@ -140,7 +172,11 @@ const useMemoizedElementCosts = (elements: ElementResponse[], variables: Variabl
       }
       
       if (element.labor_cost_formula) {
-        const baseLaborCost = calculateFormulaValue(element.labor_cost_formula, variables) || 0;
+        const baseLaborCost = calculateFormulaValue(
+          element.labor_cost_formula, 
+          variables,
+          element.labor_formula_variables
+        ) || 0;
         const markupMultiplier = 1 + ((element.markup || 0) / 100);
         laborCost = baseLaborCost * markupMultiplier;
       } else {

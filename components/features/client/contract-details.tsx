@@ -21,6 +21,8 @@ import { clientSignContract } from "@/api-calls/contracts/client-sign-contract";
 import { toast } from "sonner";
 import { VariableResponse } from "@/types/variables/dto";
 import { TradeResponse } from "@/types/trades/dto";
+import Image from "next/image";
+import { ImageIcon } from "lucide-react";
 
 interface TermSection {
   id: number;
@@ -666,12 +668,30 @@ This Agreement shall commence on the date of signing and shall continue until th
                       <h3 className="text-lg font-semibold">Project Details</h3>
                       <div className="grid grid-cols-1 gap-6">
                         {proposal.template?.trades.map(
-                          (trade: TradeResponse) => (
-                            <div
+                          (trade: TradeResponse) => (                            <div
                               key={trade.id}
                               className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
                             >
-                              <div className="flex items-center gap-2 mb-4">
+                              <div className="flex items-center gap-3 mb-4">
+                                {/* Trade image */}
+                                {trade.image ? (
+                                  <div className="relative w-10 h-10 rounded-md overflow-hidden shrink-0">
+                                    <Image 
+                                      src={trade.image}
+                                      alt={trade.name || "Trade"}
+                                      fill
+                                      className="object-cover"
+                                      onError={(e) => {
+                                        // Fallback to placeholder on error
+                                        e.currentTarget.style.display = 'none';
+                                      }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="w-10 h-10 rounded-md bg-muted/30 flex items-center justify-center shrink-0">
+                                    <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                                  </div>
+                                )}
                                 <div className="h-6 w-1 bg-primary rounded-full"></div>
                                 <h4 className="font-medium">
                                   {trade.name || "Trade Name"}
@@ -686,24 +706,47 @@ This Agreement shall commence on the date of signing and shall continue until th
                                       Number(element.material_cost || 0) +
                                       Number(element.labor_cost || 0);
 
-                                    return (
-                                      <div
+                                    return (                                      <div
                                         key={element.id}
                                         className="bg-gray-50 rounded-md p-3 border border-gray-100 hover:border-primary/20 transition-colors"
                                       >
-                                        <div className="flex justify-between items-center mb-1">
-                                          <h5 className="font-medium text-sm">
-                                            {element.name || "Element Name"}
-                                          </h5>
-                                          <span className="font-medium text-sm bg-white px-3 py-1 rounded text-primary border border-gray-100">
-                                            ${totalCost}
-                                          </span>
-                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          {/* Element image */}
+                                          {element.image ? (
+                                            <div className="relative w-8 h-8 rounded-md overflow-hidden shrink-0">
+                                              <Image 
+                                                src={element.image}
+                                                alt={element.name || "Element"}
+                                                fill
+                                                className="object-cover"
+                                                onError={(e) => {
+                                                  // Fallback to placeholder on error
+                                                  e.currentTarget.style.display = 'none';
+                                                }}
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div className="w-8 h-8 rounded-md bg-muted/30 flex items-center justify-center shrink-0">
+                                              <ImageIcon className="h-3 w-3 text-muted-foreground/50" />
+                                            </div>
+                                          )}
 
-                                        <p className="text-xs text-gray-600 line-clamp-2">
-                                          {element.description ||
-                                            "No description available"}
-                                        </p>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start mb-1">
+                                              <h5 className="font-medium text-sm">
+                                                {element.name || "Element Name"}
+                                              </h5>
+                                              <span className="font-medium text-sm bg-white px-3 py-1 rounded text-primary border border-gray-100 ml-3">
+                                                ${totalCost}
+                                              </span>
+                                            </div>
+
+                                            <p className="text-xs text-gray-600 line-clamp-2">
+                                              {element.description ||
+                                                "No description available"}
+                                            </p>
+                                          </div>
+                                        </div>
                                       </div>
                                     );
                                   })}

@@ -113,7 +113,6 @@ export function ElementDialog({
 
   // Fetch products to check if formula tokens are products
   const { data: productsData } = useQuery(getProducts(1, 999));
-
   const {
     materialFormulaTokens,
     setMaterialFormulaTokens,
@@ -124,6 +123,35 @@ export function ElementDialog({
     tokensToFormulaString,
     replaceVariableIdsWithNames,
   } = useFormula();
+
+  // Calculate dynamic dialog width based on formula content length
+  const calculateDialogWidth = useMemo(() => {
+    const maxTokenLength = Math.max(
+      ...materialFormulaTokens.map(token => (token.displayText || token.text).length),
+      ...laborFormulaTokens.map(token => (token.displayText || token.text).length),
+      0
+    );
+    
+    const tokenCount = Math.max(materialFormulaTokens.length, laborFormulaTokens.length);
+    
+    // Base width for small content
+    if (maxTokenLength <= 20 && tokenCount <= 5) {
+      return "sm:max-w-4xl"; // Default size
+    }
+    
+    // Medium width for moderate content
+    if (maxTokenLength <= 40 && tokenCount <= 10) {
+      return "sm:max-w-5xl";
+    }
+    
+    // Large width for extensive content
+    if (maxTokenLength <= 60 && tokenCount <= 15) {
+      return "sm:max-w-6xl";
+    }
+    
+    // Extra large for very long product names or many tokens
+    return "sm:max-w-7xl";
+  }, [materialFormulaTokens, laborFormulaTokens]);
 
   // Local storage helper functions
   const saveFormulasToStorage = () => {
@@ -708,7 +736,7 @@ export function ElementDialog({
       open={isOpen}
       onOpenChange={handleDialogOpenChange}
     >
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className={`${calculateDialogWidth} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <BracesIcon className="mr-2 h-4 w-4" />

@@ -567,47 +567,73 @@ export function FormulaBuilder({
           : isFormulaValid && validFormulaTokens.length > 0
             ? "border-green-300 bg-green-50/50"
             : "hover:border-primary/30 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20"
-          }`}
-        onClick={() => inputRef.current?.focus()}
+          }`}        onClick={() => inputRef.current?.focus()}
       >
-        {validFormulaTokens.map((token) => (
-          <Badge
-            key={token.id}
-            variant="outline"
-            className={`gap-1.5 px-2 py-1 text-sm rounded-md transition-all duration-150 hover:shadow cursor-text ${token.type === "variable"
-              ? "bg-gradient-to-r from-primary/5 to-primary/10 text-primary border-primary/20 shadow-sm"
-              : token.type === "operator"
-                ? "bg-gradient-to-r from-amber-500/5 to-amber-500/10 text-amber-700 border-amber-500/20 shadow-sm"
-                : token.type === "number"
+        {validFormulaTokens.map((token) => {
+          // Calculate dynamic classes for long product names
+          const displayText = token.displayText || token.text;
+          const isLongText = displayText.length > 20;
+          const isVeryLongText = displayText.length > 40;
+          
+          return (
+            <Badge
+              key={token.id}
+              variant="outline"
+              className={`gap-1.5 px-2 py-1 text-sm rounded-md transition-all duration-150 hover:shadow cursor-text group relative ${
+                token.type === "variable"
+                  ? "bg-gradient-to-r from-primary/5 to-primary/10 text-primary border-primary/20 shadow-sm"
+                  : token.type === "operator"
+                  ? "bg-gradient-to-r from-amber-500/5 to-amber-500/10 text-amber-700 border-amber-500/20 shadow-sm"
+                  : token.type === "number"
                   ? "bg-gradient-to-r from-blue-500/5 to-blue-500/10 text-blue-700 border-blue-500/20 shadow-sm"
                   : token.type === "product"
-                    ? "bg-gradient-to-r from-green-500/5 to-green-500/10 text-green-700 border-green-500/20 shadow-sm"
-                    : "bg-gray-100 text-gray-800 shadow-sm"
+                  ? "bg-gradient-to-r from-green-500/5 to-green-500/10 text-green-700 border-green-500/20 shadow-sm"
+                  : "bg-gray-100 text-gray-800 shadow-sm"
+              } ${
+                isVeryLongText ? "max-w-[300px]" : isLongText ? "max-w-[200px]" : ""
               }`}
-          >
-            {token.type === "variable" ? (
-              <Variable className="w-3 h-3 mr-1" />
-            ) : token.type === "operator" ? (
-              <Calculator className="w-3 h-3 mr-1" />
-            ) : token.type === "number" ? (
-              <Hash className="w-3 h-3 mr-1" />
-            ) : token.type === "product" ? (
-              <Package className="w-3 h-3 mr-1" />
-            ) : null}
-            {token.displayText}
-            <button
-              type="button"
-              className="h-5 w-5 rounded-full hover:bg-white/80 flex items-center justify-center ml-0.5 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeFormulaToken(token.id);
-              }}
-              aria-label={`Remove ${token.displayText}`}
             >
-              <X className="w-3 h-3" />
-            </button>
-          </Badge>
-        ))}
+              {token.type === "variable" ? (
+                <Variable className="w-3 h-3 mr-1 flex-shrink-0" />
+              ) : token.type === "operator" ? (
+                <Calculator className="w-3 h-3 mr-1 flex-shrink-0" />
+              ) : token.type === "number" ? (
+                <Hash className="w-3 h-3 mr-1 flex-shrink-0" />
+              ) : token.type === "product" ? (
+                <Package className="w-3 h-3 mr-1 flex-shrink-0" />
+              ) : null}
+              
+              <span 
+                className={`${
+                  isLongText 
+                    ? "truncate block" 
+                    : ""
+                }`}
+                title={isLongText ? displayText : undefined}
+              >
+                {displayText}
+              </span>
+              
+              {/* Tooltip for long text */}
+              {isLongText && (
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap max-w-[400px] text-center">
+                  {displayText}
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                </div>
+              )}
+                <button
+                type="button"
+                className="h-5 w-5 rounded-full hover:bg-white/80 flex items-center justify-center ml-0.5 transition-colors flex-shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFormulaToken(token.id);
+                }}
+                aria-label={`Remove ${token.displayText}`}
+              >
+                <X className="w-3 h-3" />              </button>
+            </Badge>
+          );
+        })}
 
         <Input
           ref={inputRef}

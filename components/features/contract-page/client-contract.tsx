@@ -20,6 +20,8 @@ import {
 import { createContract } from "@/api-calls/contracts/create-contract";
 import { updateContract } from "@/api-calls/server/contracts";
 import { toast } from "sonner";
+import Image from "next/image";
+import { ImageIcon } from "lucide-react";
 
 interface TermSection {
   id: number;
@@ -547,10 +549,10 @@ export function ClientContractDetails({ proposal }: ContractDetailsProps) {
                             {moduleItem.module?.name || "Module"}
                           </h4>
                           {proposal.project_elements && (
-                            <div className="rounded-lg border p-4 overflow-x-auto">
-                              <Table>
+                            <div className="rounded-lg border p-4 overflow-x-auto">                              <Table>
                                 <TableHeader>
                                   <TableRow>
+                                    <TableHead className="w-[60px]">Image</TableHead>
                                     <TableHead>Element</TableHead>
                                     <TableHead>Description</TableHead>
                                     <TableHead className="text-right">
@@ -565,8 +567,28 @@ export function ClientContractDetails({ proposal }: ContractDetailsProps) {
                                         element.project_module?.module?.id ===
                                         moduleItem.module?.id
                                     )
-                                    .map((element: any) => (
-                                      <TableRow key={element.id}>
+                                    .map((element: any) => (                                      <TableRow key={element.id}>
+                                        {/* Element image */}
+                                        <TableCell>
+                                          {element.element?.image ? (
+                                            <div className="relative w-10 h-10 rounded-md overflow-hidden">
+                                              <Image 
+                                                src={element.element.image}
+                                                alt={element.element?.name || "Element"}
+                                                fill
+                                                className="object-cover"
+                                                onError={(e) => {
+                                                  // Fallback to placeholder on error
+                                                  e.currentTarget.style.display = 'none';
+                                                }}
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div className="w-10 h-10 rounded-md bg-muted/30 flex items-center justify-center">
+                                              <ImageIcon className="h-4 w-4 text-muted-foreground/50" />
+                                            </div>
+                                          )}
+                                        </TableCell>
                                         <TableCell className="font-medium">
                                           {element.element?.name || "Element"}
                                         </TableCell>
