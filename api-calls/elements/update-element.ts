@@ -1,5 +1,3 @@
-
-
 import {
   ElementCreateRequest,
   ElementUpdateRequest,
@@ -7,12 +5,13 @@ import {
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const TOKEN = Cookies.get("auth-token");
 
 export async function updateElement(
   elementId: string,
   element: ElementUpdateRequest
-) {  try {
+) {
+  try {
+    const TOKEN = Cookies.get("auth-token");
     const payload: Record<string, any> = {};
     payload.name = element.name ?? "";
     payload.description = element.description ?? "";

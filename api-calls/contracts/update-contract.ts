@@ -4,11 +4,10 @@ import { ContractUpdateRequest } from "@/types/contracts/dto";
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const getAuthToken = () => Cookies.get('auth-token');
 
 export const updateContract = async (id: string, contract: Partial<ContractUpdateRequest>) => {
   try {
-    const token = getAuthToken();
+    const TOKEN = Cookies.get('auth-token');
     const payload: Record<string, any> = {};
     
     if (contract.name) payload.name = contract.name;
@@ -23,7 +22,7 @@ export const updateContract = async (id: string, contract: Partial<ContractUpdat
     const response = await fetch(`${API_URL}/v1/contracts/update/${id}/`, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${TOKEN}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload)

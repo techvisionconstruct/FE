@@ -1,16 +1,13 @@
-
-
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const getAuthToken = () => Cookies.get("auth-token");
 
 export const getAllProposals = async (
   page = 1,
   pageSize = 10,
   searchQuery?: string
 ) => {
-  const token = getAuthToken();
+  const TOKEN = Cookies.get("auth-token");
 
   let url = `${API_URL}/v1/proposals/list/?page=${page}&page_size=${pageSize}`;
   if (searchQuery) {
@@ -19,7 +16,7 @@ export const getAllProposals = async (
 
   const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${TOKEN}`,
     },
   });
   return res.json();

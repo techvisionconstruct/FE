@@ -4,13 +4,13 @@ import { VariableUpdateRequest } from "@/types/variables/dto";
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const TOKEN = Cookies.get("auth-token");
 
 export async function updateVariable(
   variableId: string,
   variable: VariableUpdateRequest
 ) {
   try {
+    const TOKEN = Cookies.get('auth-token');
     const payload: Record<string, any> = {};
     if (variable.name !== undefined) payload.name = variable.name;
     if (variable.description !== undefined) payload.description = variable.description;
