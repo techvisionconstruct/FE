@@ -129,9 +129,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       setLocalVariables(data.variables);
     }
   }, [data.variables]);
-
   // Use our formula hook for formula management
-  const { replaceVariableNamesWithIds, replaceVariableIdsWithNames } =
+  const { replaceVariableNamesWithIds, replaceVariableIdsWithNames, replaceIdsWithNamesInFormula } =
     useFormula();
 
   // UI state
@@ -532,14 +531,14 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         // Collect all variable names from element formulas
         const variablesToAdd: VariableResponse[] = [];
 
-        newTrade.elements.forEach((element) => {
-          // Extract variable names from material formula
+        newTrade.elements.forEach((element) => {          // Extract variable names from material formula
           if (element.material_cost_formula) {
             const materialFormulaVariableNames = extractVariableNamesFromFormula(
-              replaceVariableIdsWithNames(
+              replaceIdsWithNamesInFormula(
                 element.material_cost_formula,
                 [], // Empty array because we're looking for names already in the formula
-                element.material_formula_variables || []
+                element.material_formula_variables || [],
+                undefined // No products data available in this component
               )
             );
 
@@ -558,15 +557,14 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                 variablesToAdd.push(availableVariable);
               }
             });
-          }
-
-          // Extract variable names from labor formula
+          }          // Extract variable names from labor formula
           if (element.labor_cost_formula) {
             const laborFormulaVariableNames = extractVariableNamesFromFormula(
-              replaceVariableIdsWithNames(
+              replaceIdsWithNamesInFormula(
                 element.labor_cost_formula,
                 [], // Empty array because we're looking for names already in the formula
-                element.labor_formula_variables || []
+                element.labor_formula_variables || [],
+                undefined // No products data available in this component
               )
             );
 
@@ -1932,24 +1930,24 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                                               <div className="space-y-1">
                                                 {element.material_cost_formula && (
                                                   <div className="text-xs">
-                                                    <span className="font-medium">Material:</span>{" "}
-                                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
-                                                      {replaceVariableIdsWithNames(
+                                                    <span className="font-medium">Material:</span>{" "}                                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
+                                                      {replaceIdsWithNamesInFormula(
                                                         element.material_cost_formula,
                                                         localVariables,
-                                                        element.material_formula_variables || []
+                                                        element.material_formula_variables || [],
+                                                        undefined // No products data available in this component
                                                       )}
                                                     </code>
                                                   </div>
                                                 )}
                                                 {element.labor_cost_formula && (
                                                   <div className="text-xs">
-                                                    <span className="font-medium">Labor:</span>{" "}
-                                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
-                                                      {replaceVariableIdsWithNames(
+                                                    <span className="font-medium">Labor:</span>{" "}                                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
+                                                      {replaceIdsWithNamesInFormula(
                                                         element.labor_cost_formula,
                                                         localVariables,
-                                                        element.labor_formula_variables || []
+                                                        element.labor_formula_variables || [],
+                                                        undefined // No products data available in this component
                                                       )}
                                                     </code>
                                                   </div>

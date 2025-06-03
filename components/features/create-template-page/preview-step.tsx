@@ -9,28 +9,7 @@ import { TemplateCreateRequest } from "@/types/templates/dto";
 import { TradeResponse } from "@/types/trades/dto";
 import { VariableResponse } from "@/types/variables/dto";
 import { ImageIcon } from "lucide-react"; // Changed from @heroicons/react/outline to lucide-react
-
-const replaceVariableIdsWithNames = (
-  formula: string,
-  variableList: VariableResponse[],
-  formulaVars: Record<string, any>[]
-): string => {
-  if (!formula || !formulaVars || !variableList) return formula;
-
-  let displayFormula = formula;
-
-  formulaVars.forEach((variable) => {
-    const variableName =
-      variableList.find((v) => v.id === variable.id)?.name ||
-      variable.name ||
-      variable.id;
-
-    const idPattern = new RegExp(`\\{${variable.id}\\}`, "g");
-    displayFormula = displayFormula.replace(idPattern, `{${variableName}}`);
-  });
-
-  return displayFormula;
-};
+import { useFormula } from "./hooks/use-formula";
 
 interface PreviewStepProps {
   data: TemplateCreateRequest;
@@ -42,7 +21,10 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
   data, 
   tradeObjects = [], 
   variableObjects = [] 
-}) => {  const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b";
+}) => {
+  const { replaceIdsWithNamesInFormula } = useFormula();
+  
+  const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b";
   
   return (
     <div className="p-0 mx-auto">
@@ -173,24 +155,24 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                               <div className="space-y-1">
                                 {element.material_cost_formula && (
                                   <div className="text-xs">
-                                    <span className="font-medium">Material:</span>{" "}
-                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
-                                      {replaceVariableIdsWithNames(
+                                    <span className="font-medium">Material:</span>{" "}                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
+                                      {replaceIdsWithNamesInFormula(
                                         element.material_cost_formula,
                                         variableObjects,
-                                        element.material_formula_variables || []
+                                        element.material_formula_variables || [],
+                                        undefined // No products data available in this component
                                       )}
                                     </code>
                                   </div>
                                 )}
                                 {element.labor_cost_formula && (
                                   <div className="text-xs">
-                                    <span className="font-medium">Labor:</span>{" "}
-                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
-                                      {replaceVariableIdsWithNames(
+                                    <span className="font-medium">Labor:</span>{" "}                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
+                                      {replaceIdsWithNamesInFormula(
                                         element.labor_cost_formula,
                                         variableObjects,
-                                        element.labor_formula_variables || []
+                                        element.labor_formula_variables || [],
+                                        undefined // No products data available in this component
                                       )}
                                     </code>
                                   </div>

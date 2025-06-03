@@ -112,8 +112,7 @@ export function ElementDialog({
   }, [variables]);
 
   // Fetch products to check if formula tokens are products
-  const { data: productsData } = useQuery(getProducts(1, 999));
-  const {
+  const { data: productsData } = useQuery(getProducts(1, 999));  const {
     materialFormulaTokens,
     setMaterialFormulaTokens,
     laborFormulaTokens,
@@ -122,6 +121,7 @@ export function ElementDialog({
     parseFormulaToTokens,
     tokensToFormulaString,
     replaceVariableIdsWithNames,
+    replaceIdsWithNamesInFormula,
   } = useFormula();
 
   // Calculate dynamic dialog width based on formula content length
@@ -255,54 +255,50 @@ export function ElementDialog({
       } else if (elementToEdit) {
         // Initialize from element to edit
         let materialTokens = [],
-          laborTokens = [];
-
-        if (elementToEdit.material_cost_formula) {
+          laborTokens = [];        if (elementToEdit.material_cost_formula) {
           // For variables, we want to display names instead of IDs for better user experience
-          let displayFormula = replaceVariableIdsWithNames(
+          let displayFormula = replaceIdsWithNamesInFormula(
             elementToEdit.material_cost_formula,
             filteredVariables,
-            elementToEdit.material_formula_variables || []
-          );
-
-          materialTokens = parseFormulaToTokens(displayFormula);
+            elementToEdit.material_formula_variables || [],
+            productsData?.data
+          );          materialTokens = parseFormulaToTokens(displayFormula);
           
           materialTokens = materialTokens.map((token) => {
+            // First check if this token is a product in formula variables
             if (
               elementToEdit.material_formula_variables &&
               elementToEdit.material_formula_variables.length > 0
             ) {
-              const productVariable =
-                elementToEdit.material_formula_variables.find(
-                  (variable: any) =>
-                    (variable.name === token.text ||
-                      variable.name === token.displayText) &&
-                    variable.type === "product"
-                );
+              // Check if this token ID matches a product from the products API
+              const matchedProduct = productsData?.data?.find(
+                (product: ProductResponse) => product.id === token.text
+              );
 
-              if (productVariable) {
+              if (matchedProduct) {
                 return {
                   ...token,
                   type: "product" as const,
-                  text: productVariable.id,
-                  displayText: `${productVariable.name || token.text}`,
+                  text: matchedProduct.id,
+                  displayText: matchedProduct.title,
                 };
               }
-            }
 
-            const matchedProduct = productsData?.data?.find(
-              (product: ProductResponse) =>
-                product.title.toLowerCase() === token.text.toLowerCase() ||
-                token.text.includes(product.id)
-            );
+              // Check if token text matches a product name
+              const productByName = productsData?.data?.find(
+                (product: ProductResponse) =>
+                  product.title.toLowerCase() === token.text.toLowerCase() ||
+                  product.title.toLowerCase() === token.displayText?.toLowerCase()
+              );
 
-            if (matchedProduct) {
-              return {
-                ...token,
-                type: "product" as const,
-                text: matchedProduct.id,
-                displayText: `${matchedProduct.title}`,
-              };
+              if (productByName) {
+                return {
+                  ...token,
+                  type: "product" as const,
+                  text: productByName.id,
+                  displayText: productByName.title,
+                };
+              }
             }
 
             return token;
@@ -315,28 +311,52 @@ export function ElementDialog({
           );
         } else {
           setMaterialFormulaTokens([]);
-        }
-
-        if (elementToEdit.labor_cost_formula) {
+        }        if (elementToEdit.labor_cost_formula) {
           // For variables, we want to display names instead of IDs for better user experience
-          let displayFormula = replaceVariableIdsWithNames(
+          let displayFormula = replaceIdsWithNamesInFormula(
             elementToEdit.labor_cost_formula,
             filteredVariables,
-            elementToEdit.labor_formula_variables || []
-          );
-
-          laborTokens = parseFormulaToTokens(displayFormula);
+            elementToEdit.labor_formula_variables || [],
+            productsData?.data
+          );          laborTokens = parseFormulaToTokens(displayFormula);
 
           laborTokens = laborTokens.map((token) => {
+            // First check if this token is a product in formula variables
             if (
-              token.displayText?.startsWith("product:") &&
-              token.type !== "product"
+              elementToEdit.labor_formula_variables &&
+              elementToEdit.labor_formula_variables.length > 0
             ) {
-              return {
-                ...token,
-                type: "product" as const,
-              };
+              // Check if this token ID matches a product from the products API
+              const matchedProduct = productsData?.data?.find(
+                (product: ProductResponse) => product.id === token.text
+              );
+
+              if (matchedProduct) {
+                return {
+                  ...token,
+                  type: "product" as const,
+                  text: matchedProduct.id,
+                  displayText: matchedProduct.title,
+                };
+              }
+
+              // Check if token text matches a product name
+              const productByName = productsData?.data?.find(
+                (product: ProductResponse) =>
+                  product.title.toLowerCase() === token.text.toLowerCase() ||
+                  product.title.toLowerCase() === token.displayText?.toLowerCase()
+              );
+
+              if (productByName) {
+                return {
+                  ...token,
+                  type: "product" as const,
+                  text: productByName.id,
+                  displayText: productByName.title,
+                };
+              }
             }
+
             return token;
           });
 
@@ -363,14 +383,13 @@ export function ElementDialog({
           saveFormulasToStorage();
         }, 100);
       }
-    }
-  }, [
+    }  }, [
     isOpen,
     elementToEdit,
     initialName,
     filteredVariables,
     parseFormulaToTokens,
-    replaceVariableIdsWithNames,
+    replaceIdsWithNamesInFormula,
     productsData?.data,
   ]);
 

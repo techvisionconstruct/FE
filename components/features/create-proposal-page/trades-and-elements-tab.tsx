@@ -57,6 +57,8 @@ import { TemplateResponse } from "@/types/templates/dto";
 import { getTrades } from "@/query-options/trades";
 import { getElements } from "@/query-options/elements";
 import { getVariables } from "@/query-options/variables";
+import { getProducts } from "@/query-options/products";
+import { ProductResponse } from "@/types/products/dto";
 
 declare global {
   interface Window {
@@ -103,7 +105,7 @@ const calculateFormulaValue = (
 
     // Add values from formula variables (which includes both variables and products)
     const formulaValues: Record<string, number> = {};
-    if (formulaVariables) {
+    if (formulaVariables && formulaVariables.length > 0) {
       formulaVariables.forEach(item => {
         // Handle both variable and product formats from backend
         const itemId = item.id || item.variable_id || item.product_id;
@@ -121,11 +123,19 @@ const calculateFormulaValue = (
     for (const match of matches) {
       const itemId = match.slice(1, -1);
       
-      // First check formula variables (includes both variables and products)
-      let itemValue = formulaValues[itemId];
+      // If we have formula variables, prioritize them; otherwise use regular variables
+      let itemValue: number | undefined;
       
-      // If not found, check regular variables
-      if (itemValue === undefined) {
+      if (formulaVariables && formulaVariables.length > 0) {
+        // First check formula variables (includes both variables and products)
+        itemValue = formulaValues[itemId];
+        
+        // If not found in formula variables, check regular variables as fallback
+        if (itemValue === undefined) {
+          itemValue = variableValues[itemId];
+        }
+      } else {
+        // If no formula variables provided, use regular variables directly
         itemValue = variableValues[itemId];
       }
       
@@ -143,12 +153,39 @@ const calculateFormulaValue = (
     return typeof result === 'number' ? result : null;
   } catch (error) {
     console.error("Error calculating formula value:", error);
-    return null;
-  }
+    return null;  }
 };
 
+// Helper function to merge formula variables with actual current values
+const mergeFormulaVariablesWithCurrentValues = (
+  formulaVariables: Record<string, any>[] = [],
+  products: ProductResponse[] = []
+): Record<string, any>[] => {
+    return formulaVariables.map(item => {
+      // If this is a product, find the current product data and get its price
+      if (item.type === 'product' && item.product_id) {
+        const currentProduct = products.find(p => p.id === item.product_id);
+        if (currentProduct) {
+          return {
+            ...item,
+            id: item.product_id,
+            cost: currentProduct.price || 0,
+            value: currentProduct.price || 0
+          };
+        }
+      }
+      // For variables, keep as is (they already have current values)
+      return item;
+    });
+  };
+
 // Memoized cost calculation helper
-const useMemoizedElementCosts = (elements: ElementResponse[], variables: VariableResponse[]) => {
+const useMemoizedElementCosts = (
+  elements: ElementResponse[], 
+  variables: VariableResponse[], 
+  products: ProductResponse[] = [],
+  trigger: number = 0
+) => {
   return useMemo(() => {
     const elementCosts: Record<string, { materialCost: number | null; laborCost: number | null; totalCost: number }> = {};
     
@@ -159,10 +196,16 @@ const useMemoizedElementCosts = (elements: ElementResponse[], variables: Variabl
       // If there's a formula, calculate base cost and apply markup
       // If there's no formula, use backend value (which already includes markup)
       if (element.material_cost_formula) {
+        // Merge formula variables with current product values
+        const materialFormulaVariablesWithValues = mergeFormulaVariablesWithCurrentValues(
+          element.material_formula_variables, 
+          products
+        );
+        
         const baseMaterialCost = calculateFormulaValue(
           element.material_cost_formula, 
           variables,
-          element.material_formula_variables
+          materialFormulaVariablesWithValues
         ) || 0;
         const markupMultiplier = 1 + ((element.markup || 0) / 100);
         materialCost = baseMaterialCost * markupMultiplier;
@@ -172,10 +215,16 @@ const useMemoizedElementCosts = (elements: ElementResponse[], variables: Variabl
       }
       
       if (element.labor_cost_formula) {
+        // Merge formula variables with current product values
+        const laborFormulaVariablesWithValues = mergeFormulaVariablesWithCurrentValues(
+          element.labor_formula_variables, 
+          products
+        );
+        
         const baseLaborCost = calculateFormulaValue(
           element.labor_cost_formula, 
           variables,
-          element.labor_formula_variables
+          laborFormulaVariablesWithValues
         ) || 0;
         const markupMultiplier = 1 + ((element.markup || 0) / 100);
         laborCost = baseLaborCost * markupMultiplier;
@@ -192,9 +241,8 @@ const useMemoizedElementCosts = (elements: ElementResponse[], variables: Variabl
         totalCost
       };
     });
-    
-    return elementCosts;
-  }, [elements, variables]);
+      return elementCosts;
+  }, [elements, variables, products, trigger]);
 };
 
 const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
@@ -296,9 +344,11 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   const [globalMarkupValue, setGlobalMarkupValue] = useState(1);
   const [editingMarkupElementId, setEditingMarkupElementId] = useState<string | null>(null);
   const [inlineMarkupValue, setInlineMarkupValue] = useState(0);
-  
-  // State for tracking element cost loading states
+    // State for tracking element cost loading states
   const [updatingElementCosts, setUpdatingElementCosts] = useState<Set<string>>(new Set());
+  
+  // Force re-render trigger for cost calculations
+  const [costUpdateTrigger, setCostUpdateTrigger] = useState(0);
 
   const toggleFormulaDisplay = (variableId: string) => {
     setShowingFormulaIds(prev => ({
@@ -315,15 +365,16 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   );  const { data: searchVariablesData, isLoading: variablesLoading } = useQuery(
     getVariables(1, 10, searchQuery)
   );
+  const { data: productsData, isLoading: productsLoading } = useQuery(
+    getProducts(1, 1000) // Get a large number to ensure we have all products for formulas
+  );
   const { data: apiVariableTypes = [], isLoading: isLoadingVariableTypes } =
     useQuery({
       queryKey: ["variable-types"],
       queryFn: () => getAllVariableTypes(),
-    });
-
-  // Memoized cost calculations for all elements
-  const allElements = trades.flatMap(trade => trade.elements || []);
-  const elementCosts = useMemoizedElementCosts(allElements, variables);
+    });  // Memoized cost calculations for all elements
+  const allElements = useMemo(() => trades.flatMap(trade => trade.elements || []), [trades]);
+  const elementCosts = useMemoizedElementCosts(allElements, variables, productsData?.data || [], costUpdateTrigger);
 
   useEffect(() => {
     window.openVariableDialog = (variableName: string, callback: (newVar: any) => void) => {
@@ -340,13 +391,13 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     mutationFn: createVariable,
     onSuccess: (response) => {
       if (response && response.data) {
-        const createdVariable = response.data;
-        updateVariables([...variables, createdVariable]);
-
-        // Invalidate related queries to refetch updated data
-        queryClient.invalidateQueries({ queryKey: ["variables"] });
+        const createdVariable = response.data;        updateVariables([...variables, createdVariable]);        // Invalidate related queries to refetch updated data        queryClient.invalidateQueries({ queryKey: ["variables"] });
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
+        queryClient.invalidateQueries({ queryKey: ["product"] }); // Fixed: was ["products"]
+        
+        // Force cost recalculation
+        setCostUpdateTrigger(prev => prev + 1);
 
         if (pendingVariableCallback) {
           try {
@@ -506,6 +557,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         // Invalidate related queries to refetch updated data
         queryClient.invalidateQueries({ queryKey: ["trades"] });
         queryClient.invalidateQueries({ queryKey: ["elements"] });
+        queryClient.invalidateQueries({ queryKey: ["product"] });
+
       },
     });
 
@@ -517,11 +570,11 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       }: {
         templateId: string;
         data: { variables?: string[]; trades?: string[] };
-      }) => updateProposalTemplate(templateId, data),      onSuccess: () => {
-        // Invalidate related queries to refetch updated data
+      }) => updateProposalTemplate(templateId, data),      onSuccess: () => {        // Invalidate related queries to refetch updated data
         queryClient.invalidateQueries({ queryKey: ["variables"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
         queryClient.invalidateQueries({ queryKey: ["elements"] });
+        queryClient.invalidateQueries({ queryKey: ["product"] });
         
         toast.success("Template updated successfully", {
           position: "top-center",
@@ -615,12 +668,11 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     useMutation({
       mutationFn: createElement,      onSuccess: (response) => {
         if (response && response.data) {
-          const createdElement = response.data;
-
-          // Invalidate related queries to refetch updated data
+          const createdElement = response.data;          // Invalidate related queries to refetch updated data
           queryClient.invalidateQueries({ queryKey: ["elements"] });
           queryClient.invalidateQueries({ queryKey: ["trades"] });
           queryClient.invalidateQueries({ queryKey: ["variables"] });
+          queryClient.invalidateQueries({ queryKey: ["product"] });
 
           const updatedTrades = trades.map((trade) => {
             if (trade.id === currentTradeId) {
@@ -946,13 +998,14 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       created_by: variable.created_by,
       updated_by: variable.updated_by,
     };    if (!variables.some((v) => v.id === newVar.id)) {
-      const updatedVariables = [...variables, newVar];
-      updateVariables(updatedVariables);
-
-      // Invalidate queries when a variable is added
+      const updatedVariables = [...variables, newVar];      updateVariables(updatedVariables);      // Invalidate queries when a variable is added
       queryClient.invalidateQueries({ queryKey: ["variables"] });
       queryClient.invalidateQueries({ queryKey: ["elements"] });
       queryClient.invalidateQueries({ queryKey: ["trades"] });
+      queryClient.invalidateQueries({ queryKey: ["product"] });
+      
+      // Force cost recalculation
+      setCostUpdateTrigger(prev => prev + 1);
 
       if (templateId) {
         updateTemplateMutation({
@@ -966,13 +1019,14 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     setSearchQuery("");
   };
   const handleRemoveVariable = (variableId: string) => {
-    const updatedVariables = variables.filter((v) => v.id !== variableId);
-    updateVariables(updatedVariables);
-
-    // Invalidate queries when a variable is removed
+    const updatedVariables = variables.filter((v) => v.id !== variableId);    updateVariables(updatedVariables);    // Invalidate queries when a variable is removed
     queryClient.invalidateQueries({ queryKey: ["variables"] });
     queryClient.invalidateQueries({ queryKey: ["elements"] });
     queryClient.invalidateQueries({ queryKey: ["trades"] });
+    queryClient.invalidateQueries({ queryKey: ["product"] });
+    
+    // Force cost recalculation
+    setCostUpdateTrigger(prev => prev + 1);
 
     if (templateId) {
       updateTemplateMutation({
@@ -1007,16 +1061,18 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         updatedVar.value !== variables[idx].value
       );
       
-      if (hasChanges) {
-        updateVariables(updatedVariables);
-        
-        // Invalidate queries when variables are updated due to formula calculations
+      if (hasChanges) {        updateVariables(updatedVariables);
+          // Invalidate queries when variables are updated due to formula calculations
         queryClient.invalidateQueries({ queryKey: ["variables"] });
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
+        queryClient.invalidateQueries({ queryKey: ["product"] });
+        
+        // Force cost recalculation
+        setCostUpdateTrigger(prev => prev + 1);
       }
     }
-  }, [variables, updateVariables, queryClient]);
+  }, [variables, updateVariables, queryClient, setCostUpdateTrigger]);
 
   const startInlineValueEdit = (variable: VariableResponse) => {
     setInlineEditingVariableId(variable.id);
@@ -1061,19 +1117,40 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         }
         return variable;
       });
-      updateVariables(updatedVariables);
-
-      // 3. Find and prepare elements for update
-      const elementsToUpdate = trades.flatMap(trade => 
-        (trade.elements || []).filter(element => {
-          const usesVariable = [
-            ...(element.material_formula_variables || []),
-            ...(element.labor_formula_variables || [])
-          ].some(v => v.id.toString() === variableId);
-          return usesVariable;
-        }).map(element => ({
-          elementId: element.id,
-          data: {
+      updateVariables(updatedVariables);      // 3. Update ALL elements to ensure product-based formulas are refreshed
+      // Count elements to update
+      let elementCount = 0;
+      trades.forEach(trade => {
+        if (trade.elements?.length) {
+          elementCount += trade.elements.length;
+        }
+      });
+      
+      if (elementCount === 0) {
+        toast.success("Variable updated successfully");
+        return;
+      }
+      
+      const loadingToast = toast.loading(`Updating ${elementCount} elements after variable change...`, {
+        position: "top-center"
+      });
+      
+      // Create a set of element IDs to show loading state
+      const allElementIds = new Set(
+        trades.flatMap(trade => 
+          (trade.elements || []).map(element => element.id)
+        )
+      );
+      setUpdatingElementCosts(allElementIds);
+      
+      const updatePromises: Promise<{tradeId: string, updatedElement: any}>[] = [];
+      
+      trades.forEach(trade => {
+        trade.elements?.forEach(element => {
+          if (!element || !element.id) return; // Skip invalid elements
+          
+          // Create a complete element update with all required fields - passing 1:1 the same data
+          const elementData = {
             name: element.name,
             description: element.description || undefined,
             image: element.image || undefined,
@@ -1082,36 +1159,58 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
             markup: element.markup || 0,
             material_formula_variables: element.material_formula_variables || [],
             labor_formula_variables: element.labor_formula_variables || [],
-            // Add these fields if they're required by your API
             origin: element.origin || 'derived'
-          }
-        }))
-      );
+          };
+          
+          // Add this update to our promises array
+          updatePromises.push(
+            patchElement(element.id, elementData)
+              .then(response => ({
+                tradeId: trade.id,
+                updatedElement: response.data
+              }))
+              .catch(error => {
+                console.error(`Error updating element ${element.id}:`, error);
+                throw error;
+              })
+          );
+        });
+      });
 
-      // 4. Set loading state for affected elements
-      setUpdatingElementCosts(new Set(elementsToUpdate.map(e => e.elementId)));
-
-      // 5. Update elements
-      if (elementsToUpdate.length > 0) {
-        await Promise.all(
-          elementsToUpdate.map(async ({ elementId, data }) => {
-            try {
-              await patchElement(elementId, data);
-            } catch (error) {
-              console.error(`Error updating element ${elementId}:`, error);
-              throw error;
-            }
-          })
-        );
+      try {
+        const results = await Promise.all(updatePromises);
+        console.log(`Successfully updated ${results.length} elements after variable change`);
         
-        // 6. Refresh queries
+        const updatedTrades = trades.map(trade => ({
+          ...trade,
+          elements: trade.elements?.map(element => {
+            const result = results.find(r => 
+              r.tradeId === trade.id && 
+              r.updatedElement.id === element.id
+            );
+            return result ? result.updatedElement : element;
+          }) || []
+        }));
+        
+        updateTrades(updatedTrades);
+        
+        // Refresh queries
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
-      }
-
-      toast.success(`Updated variable and ${elementsToUpdate.length} elements`);
-
-    } catch (error) {
+        queryClient.invalidateQueries({ queryKey: ["product"] });
+        
+        // Force cost recalculation
+        setCostUpdateTrigger(prev => prev + 1);
+        
+        toast.dismiss(loadingToast);
+        toast.success(`Updated variable and ${results.length} elements`, {
+          position: "top-center",
+          description: `All element costs have been refreshed.`
+        });
+      } catch (error) {
+        toast.dismiss(loadingToast);
+        throw error; // Let the outer catch handle this
+      }    } catch (error) {
       console.error('Error updating variable and elements:', error);
       toast.error('Failed to update variable and elements');
     } finally {
@@ -1782,22 +1881,25 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
             console.log('Updating element in edit dialog:', elementId);
             return patchElement(elementId, data);
           })
-        );
-
-        console.log('All elements updated successfully in edit dialog:', responses.length);
-
-        // Invalidate queries after all elements are updated
+        );        console.log('All elements updated successfully in edit dialog:', responses.length);        // Invalidate queries after all elements are updated
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
+        queryClient.invalidateQueries({ queryKey: ["product"] });
+        
+        // Force cost recalculation
+        setCostUpdateTrigger(prev => prev + 1);
         
         toast.success(`Variable updated and ${elementsToUpdate.length} dependent elements refreshed`, {
           position: "top-center",
           description: `All changes have been saved successfully.`
         });
-      } else {
-        // Still invalidate queries even if no elements need updates
+      } else {        // Still invalidate queries even if no elements need updates
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
+        queryClient.invalidateQueries({ queryKey: ["product"] });
+        
+        // Force cost recalculation
+        setCostUpdateTrigger(prev => prev + 1);
         
         toast.success("Variable updated successfully", {
           position: "top-center",
