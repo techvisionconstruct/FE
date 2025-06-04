@@ -76,6 +76,7 @@ interface TradesAndElementsStepProps {
   template: TemplateResponse | null;
   updateTrades: (trades: TradeResponse[]) => void;
   updateVariables?: (variables: VariableResponse[]) => void;
+  onElementsUpdatingChange?: (isUpdating: boolean) => void;
 }
 
 const extractFormulaVariables = (formula: string): Record<string, any>[] => {
@@ -252,6 +253,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   template,
   updateTrades,
   updateVariables = () => {},
+  onElementsUpdatingChange = () => {},
 }) => {
   const queryClient = useQueryClient();
   const variables = data.variables || [];
@@ -349,6 +351,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   >(null);
   const [isGlobalMarkupEnabled, setIsGlobalMarkupEnabled] = useState(false);
   const [globalMarkupValue, setGlobalMarkupValue] = useState(1);
+  const [isApplyingGlobalMarkup, setIsApplyingGlobalMarkup] = useState(false);
   const [editingMarkupElementId, setEditingMarkupElementId] = useState<string | null>(null);
   const [inlineMarkupValue, setInlineMarkupValue] = useState(0);
     // State for tracking element cost loading states
@@ -1296,6 +1299,11 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       return;
     }
     
+    // Set the updating state to true and notify parent component
+    setIsApplyingGlobalMarkup(true);
+    if (onElementsUpdatingChange) {
+      onElementsUpdatingChange(true);
+    }
 
     const loadingToast = showToast ? toast.loading(`Updating ${elementCount} elements with ${markupValue}% markup...`, {
       position: "top-center"
@@ -1335,8 +1343,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       });
     });
 
-    Promise.all(updatePromises)
-      .then((results) => {
+    Promise.all(updatePromises)      .then((results) => {
         console.log(`Successfully updated ${results.length} elements with markup ${markupValue}%`);
 
         const updatedTrades = trades.map(trade => ({
@@ -1350,8 +1357,14 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
           }) || []
         }));
 
-        updateTrades(updatedTrades);        queryClient.invalidateQueries({ queryKey: ["elements"] });
+        updateTrades(updatedTrades);
+        queryClient.invalidateQueries({ queryKey: ["elements"] });
         
+        // Set the updating state to false and notify parent component
+        setIsApplyingGlobalMarkup(false);
+        if (onElementsUpdatingChange) {
+          onElementsUpdatingChange(false);
+        }
 
         if (showToast && loadingToast) {
           toast.dismiss(loadingToast);
@@ -1363,9 +1376,13 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       })      .catch(error => {
         console.error("Error applying global markup:", error);
         
-
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         
+        // Set the updating state to false and notify parent component even on error
+        setIsApplyingGlobalMarkup(false);
+        if (onElementsUpdatingChange) {
+          onElementsUpdatingChange(false);
+        }
 
         if (showToast && loadingToast) {
           toast.dismiss(loadingToast);
@@ -1378,8 +1395,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   };  const isFirstGlobalMarkupRender = useRef(true);
   const prevMarkupEnabledRef = useRef(false);
   const prevMarkupValueRef = useRef(0);
-  
-  useEffect(() => {
+    useEffect(() => {
     if (isFirstGlobalMarkupRender.current) {
       isFirstGlobalMarkupRender.current = false;
       prevMarkupEnabledRef.current = isGlobalMarkupEnabled;
@@ -1388,44 +1404,28 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     }
       if (trades.some(trade => (trade.elements || []).length > 0)) {
       const wasJustEnabled = isGlobalMarkupEnabled && !prevMarkupEnabledRef.current;
-      const valueChanged = isGlobalMarkupEnabled && prevMarkupValueRef.current !== globalMarkupValue;
       const wasJustDisabled = !isGlobalMarkupEnabled && prevMarkupEnabledRef.current;
-      
-      // Show toast if just enabled or value changed while enabled
+        // Show toast only when the toggle is switched
       if (wasJustEnabled) {
         toast.success(`Global markup of ${globalMarkupValue}% enabled`, {
           position: "top-center",
-          description: "Applied to all elements in this proposal."
-        });
-      } else if (valueChanged) {
-        toast.success(`Global markup updated to ${globalMarkupValue}%`, {
-          position: "top-center",
-          description: "New markup value will be applied to all elements."
+          description: "Press Enter to apply to all elements in this proposal."
         });
       } else if (wasJustDisabled) {
         toast.info("Global markup disabled", {
           position: "top-center",
           description: "Individual element markup values will be used instead."
         });
+        
+        // Only invalidate elements query when disabling markup
+        queryClient.invalidateQueries({ queryKey: ["elements"] });
       }
       
       // Update ref values for next comparison
       prevMarkupEnabledRef.current = isGlobalMarkupEnabled;
       prevMarkupValueRef.current = globalMarkupValue;
-
-      const timer = setTimeout(() => {
-        if (isGlobalMarkupEnabled) {
-          // Don't show toast for automatic synchronization
-          applyGlobalMarkup(globalMarkupValue, false);
-        } else {
-          // Only invalidate elements query when disabling markup
-          queryClient.invalidateQueries({ queryKey: ["elements"] });
-        }
-      }, 100);
-      
-      return () => clearTimeout(timer);
     }
-  }, [isGlobalMarkupEnabled, globalMarkupValue, queryClient, trades]);
+  }, [isGlobalMarkupEnabled, queryClient, trades]);
 
   const startEditingElementMarkup = (element: ElementResponse) => {
     setEditingMarkupElementId(element.id);
@@ -2552,35 +2552,31 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                     </TooltipContent>
                   </Tooltip>
                 </span>
-                
-                <div className="flex items-center space-x-4 text-sm">
+                  <div className="flex items-center space-x-4 text-sm">
                   <div className="flex items-center space-x-2">
-                    <Label htmlFor="global-markup-switch" className="cursor-pointer">Global Markup</Label>
+                    <Label htmlFor="global-markup-switch" className="cursor-pointer">
+                      Global Markup {isGlobalMarkupEnabled && "(Press Enter to apply)"}
+                    </Label>
                     <Switch 
                       id="global-markup-switch" 
                       checked={isGlobalMarkupEnabled}
                       onCheckedChange={setIsGlobalMarkupEnabled}
                     />
-                  </div>                  <div className="flex items-center space-x-2">
-                    <PercentIcon className="h-4 w-4 text-muted-foreground" />
-                    <Input
+                  </div><div className="flex items-center space-x-2">
+                    <PercentIcon className="h-4 w-4 text-muted-foreground" />                    <Input
                       type="number"
                       value={globalMarkupValue}
                       onChange={(e) => setGlobalMarkupValue(Number(e.target.value))}
                       onFocus={(e) => {
                         e.target.select();
-                        if (isGlobalMarkupEnabled) {
-                          // Apply markup when input is focused (if enabled)
-                          applyGlobalMarkup(globalMarkupValue, true);
-                        }
                       }}
                       className="w-16 h-7 text-sm"
                       disabled={!isGlobalMarkupEnabled}
                       min={0}
-                      max={100}
-                      onKeyDown={(e) => {
+                      max={100}                      onKeyDown={(e) => {
                         if (e.key === 'Enter' && isGlobalMarkupEnabled) {
-                          // Show toast and apply markup when user presses Enter
+                          // IMPORTANT: This is the only place where global markup is applied
+                          // Only apply markup when user explicitly presses Enter
                           applyGlobalMarkup(globalMarkupValue, true);
                         }
                       }}
@@ -2674,7 +2670,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                       className="w-full pl-8 pr-4"
                     />
                     {tradesLoading && (
-                      <div className="absolute right-2 top-2.5">
+                      <div className="absolute right-2 top-2">
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       </div>
                     )}
@@ -3219,7 +3215,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                                           className="h-5 w-5 rounded-full opacity-0 group-hover:opacity-100 bg-muted/80 text-destructive hover:text-destructive/80"
                                           onClick={() => handleRemoveElement(element.id, trade.id)}
                                         >
-                                          <X className="h-2.5 w-2.5" />
+                                          <X className="h-3 w-3" />
                                         </Button>
                                       </div>
                                     </div>

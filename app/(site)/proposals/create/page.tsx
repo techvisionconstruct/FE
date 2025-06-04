@@ -403,8 +403,8 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
       );
     });
   };
-
   const [isSending, setIsSending] = useState(false);
+  const [isElementsUpdating, setIsElementsUpdating] = useState(false);
   const sendProposalToClient = async () => {
     const proposalToSend = createdProposal || proposal;
     if (!proposalToSend?.id) return;
@@ -635,8 +635,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
               <div className="variable-column">
                 {/* Variable column contents */}
               </div>
-            </div>
-            <TradesAndElementsStep
+            </div>            <TradesAndElementsStep
               data={{
                 trades: tradeObjects,
                 variables: variableObjects,
@@ -683,17 +682,17 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                   });
                 }
               }}
+              onElementsUpdatingChange={setIsElementsUpdating}
             />
             <div className="flex justify-between mt-6">
               <Button variant="outline" onClick={handleBack}>
                 Back
-              </Button>
-              <Button
+              </Button>              <Button
                 onClick={handleNext}
-                disabled={isUpdatingTemplate}
+                disabled={isUpdatingTemplate || isElementsUpdating}
                 className="flex items-center gap-2"
               >
-                {isUpdatingTemplate ? (
+                {isUpdatingTemplate || isElementsUpdating ? (
                   <>
                     <svg
                       className="animate-spin h-4 w-4 mr-2"
@@ -712,9 +711,8 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                         className="opacity-75"
                         fill="currentColor"
                         d="M4 12a8 8 0 018-8v8z"
-                      />
-                    </svg>
-                    Updating...
+                      />                    </svg>
+                    {isElementsUpdating ? "Waiting for elements..." : "Updating..."}
                   </>
                 ) : (
                   "Next: Create Contract"
