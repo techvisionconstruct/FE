@@ -729,6 +729,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             <CreateContract
               contract_id={contractId}
               proposal={createdProposal}
+              variables={variableObjects}
             />
 
             <div className="flex justify-between mt-6">
