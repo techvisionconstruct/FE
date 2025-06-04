@@ -1039,59 +1039,28 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
 
   // Handler to submit edit
   const handleEditVariable = () => {
-    if (!validateVariableForm() || !variableToEdit) return;
-    const updatedVariable: VariableResponse = {
-      ...variableToEdit,
-      name: newVarName.trim(),
-      description: newVarDescription.trim() || undefined,
-      value: newVarDefaultValue,
-      variable_type: {
-        ...variableToEdit.variable_type,
-        id: newVarDefaultVariableType,
-        name: variableToEdit.variable_type?.name || "",
-        category: variableToEdit.variable_type?.category || "",
-        unit: variableToEdit.variable_type?.unit || "",
-        is_built_in: variableToEdit.variable_type?.is_built_in ?? false,
-        created_at: variableToEdit.variable_type?.created_at || "",
-        updated_at: variableToEdit.variable_type?.updated_at || "",
-        created_by: variableToEdit.variable_type?.created_by,
-        updated_by: variableToEdit.variable_type?.updated_by,
-      },
-    };
-    const updatedVariables = localVariables.map((v) =>
-      v.id === variableToEdit.id ? updatedVariable : v
-    );
-    setLocalVariables(updatedVariables);
-    updateVariables(updatedVariables);
-
-    // Update template when variable is edited
-    console.log("Template ID:", templateId);
-    console.log("Updated variables after edit:", updatedVariables.map(v => v.id));
-    console.log("Current trades:", trades.map(t => t.id));
-    
-    if (templateId) {
-      console.log("Calling updateTemplateMutation after variable edit...");
-      updateTemplateMutation({
-        templateId: templateId,
-        data: {
-          trades: trades.map(t => t.id),
-          variables: updatedVariables.map(v => v.id),
-        }
-      });
-    } else {
-      console.log("Template ID is missing, cannot update template");
+    if (!currentVariableId) {
+      toast.error("No variable selected for editing");
+      return;
     }
 
-    setShowEditVariableDialog(false);
-    setVariableToEdit(null);
-    setNewVarName("");
-    setNewVarDescription("");
-    setNewVarDefaultValue(0);
-    setNewVarDefaultVariableType("");
+    // Validate required fields
+    if (!editVariableName.trim()) {
+      toast.error("Variable name is required");
+      return;
+    }    // Prepare the update data
+    const updateData = {
+      name: editVariableName.trim(),
+      description: editVariableDescription.trim() || null,
+      value: 0, // Templates always use 0 as default value
+      variable_type_id: editVariableType || null,
+      formula: editVariableFormula || null,
+    };
 
-    toast.success("Variable updated", {
-      position: "top-center",
-      description: "Variable has been updated and template saved automatically.",
+    // Call the mutation
+    updateVariableMutation({
+      variableId: currentVariableId,
+      data: updateData,
     });
   };
 

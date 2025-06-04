@@ -300,6 +300,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   const [newVarDefaultValue, setNewVarDefaultValue] = useState(0);
   const [newVarDescription, setNewVarDescription] = useState("");
   const [newVarDefaultVariableType, setNewVarDefaultVariableType] = useState("");
+  const [tradeSearchQuery, setTradeSearchQuery] = useState("");
+  const [isTradeSearchOpen, setIsTradeSearchOpen] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(-1);
   const [newTradeName, setNewTradeName] = useState("");
   const [newTradeDescription, setNewTradeDescription] = useState("");
@@ -360,41 +362,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   // Force re-render trigger for cost calculations
   const [costUpdateTrigger, setCostUpdateTrigger] = useState(0);
 
-  // Debounced search callbacks
-  const debouncedVariableSearch = useDebounceCallback(
-    (query: string) => {
-      setDebouncedSearchQuery(query);
-    },
-    300
-  );
-  
-  const debouncedTradeSearch = useDebounceCallback(
-    (query: string) => {
-      setDebouncedTradeSearchQuery(query);
-    },
-    300
-  );
-  
-  const debouncedElementSearch = useDebounceCallback(
-    (query: string) => {
-      setDebouncedElementSearchQuery(query);
-    },
-    300
-  );
-
-  // Effect to trigger debounced searches
-  useEffect(() => {
-    debouncedVariableSearch(searchQuery);
-  }, [searchQuery, debouncedVariableSearch]);
-
-  useEffect(() => {
-    debouncedTradeSearch(tradeSearchQuery);
-  }, [tradeSearchQuery, debouncedTradeSearch]);
-
-  useEffect(() => {
-    debouncedElementSearch(elementSearchQuery);
-  }, [elementSearchQuery, debouncedElementSearch]);
-
   const toggleFormulaDisplay = (variableId: string) => {
     setShowingFormulaIds(prev => ({
       ...prev,
@@ -408,7 +375,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   const { data: elementsData, isLoading: elementsLoading } = useQuery(
     getElements(1, 10, debouncedElementSearchQuery)
   );  const { data: searchVariablesData, isLoading: variablesLoading } = useQuery(
-    getVariables(1, 10, debouncedSearchQuery)
+    getVariables(1, 10, searchQuery)
   );
   const { data: productsData, isLoading: productsLoading } = useQuery(
     getProducts(1, 1000) // Get a large number to ensure we have all products for formulas
@@ -1261,6 +1228,10 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         // Refresh queries
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
+        queryClient.invalidateQueries({ queryKey: ["product"] });
+        
+        // Force cost recalculation
+        setCostUpdateTrigger(prev => prev + 1);
         
         toast.dismiss(loadingToast);
         toast.success(`Updated variable and ${results.length} elements`, {
