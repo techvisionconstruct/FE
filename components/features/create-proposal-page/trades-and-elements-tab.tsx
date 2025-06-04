@@ -519,13 +519,32 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       mutationFn: createTrade,      onSuccess: (response) => {
         if (response && response.data) {
           const createdTrade = response.data;
-          updateTrades([...trades, createdTrade]);
+          const updatedTrades = [...trades, createdTrade];
+          updateTrades(updatedTrades);
           
           // Invalidate related queries to refetch updated data
           queryClient.invalidateQueries({ queryKey: ["trades"] });
           queryClient.invalidateQueries({ queryKey: ["elements"] });
           
-          toast.success("Trade created successfully", {
+          // Auto-update template with new trade
+          if (templateId) {
+            console.log("🔄 Auto-updating template after trade creation:", {
+              templateId,
+              tradesCount: updatedTrades.length,
+              variablesCount: variables.length,
+              tradeName: createdTrade.name
+            });
+            
+            updateTemplateMutation({
+              templateId: templateId,
+              data: { 
+                trades: updatedTrades.map((t) => t.id),
+                variables: variables.map((v) => v.id)
+              },
+            });
+          }
+          
+          toast.success("Trade created and template updated automatically", {
             position: "top-center",
             description: `"${createdTrade.name}" has been added to your proposal.`,
           });          setShowAddTradeDialog(false);
@@ -1605,6 +1624,24 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
           });
         }
       }
+      
+      // Update template with new trade
+      if (templateId) {
+        console.log("🔄 Auto-updating template after trade selection:", {
+          templateId,
+          tradesCount: [...trades, newTrade].length,
+          variablesCount: variables.length,
+          tradeName: newTrade.name
+        });
+        
+        updateTemplateMutation({
+          templateId: templateId,
+          data: { 
+            trades: [...trades, newTrade].map((t) => t.id),
+            variables: variables.map((v) => v.id)
+          },
+        });
+      }
     }
 
     setIsTradeSearchOpen(false);
@@ -1612,7 +1649,33 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   };
 
   const handleRemoveTrade = (tradeId: string) => {
-    updateTrades(trades.filter((t) => t.id !== tradeId));
+    const updatedTrades = trades.filter((t) => t.id !== tradeId);
+    const removedTrade = trades.find((t) => t.id === tradeId);
+    
+    updateTrades(updatedTrades);
+    
+    // Auto-update template after trade removal
+    if (templateId) {
+      console.log("🔄 Auto-updating template after trade removal:", {
+        templateId,
+        tradesCount: updatedTrades.length,
+        variablesCount: variables.length,
+        removedTradeName: removedTrade?.name
+      });
+      
+      updateTemplateMutation({
+        templateId: templateId,
+        data: { 
+          trades: updatedTrades.map((t) => t.id),
+          variables: variables.map((v) => v.id)
+        },
+      });
+      
+      toast.success("Trade removed and template updated automatically", {
+        position: "top-center",
+        description: removedTrade ? `"${removedTrade.name}" has been removed from your proposal.` : "Trade removed successfully.",
+      });
+    }
   };
   const handleAddTrade = () => {
     if (!newTradeName.trim()) return;

@@ -62,18 +62,21 @@ import { getTrades } from "@/query-options/trades";
 import { getElements } from "@/query-options/elements";
 import { ProductResponse } from "@/types/products/dto";
 import { cn } from "@/lib/utils";
+import { updateTemplate } from "@/api-calls/templates/update-template"; // Replace with your actual import path
 
 interface TradesAndElementsStepProps {
   data: {
     trades: TradeResponse[];
     variables: VariableResponse[];
   };
+  templateId?: string | null; // Allow null values
   updateTrades: (trades: TradeResponse[]) => void;
   updateVariables?: (variables: VariableResponse[]) => void;
 }
 
 const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   data,
+  templateId, // Add this
   updateTrades,
   updateVariables = () => {},
 }) => {
@@ -164,6 +167,26 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
 
   const queryClient = useQueryClient();
 
+  // Add template update mutation (you'll need to import the appropriate API function)
+  const { mutate: updateTemplateMutation, isPending: isUpdatingTemplate } = useMutation({
+    mutationFn: ({ templateId, data }: { templateId: string; data: any }) => {
+      console.log("updateTemplateMutation called with:", { templateId, data });
+      return updateTemplate(templateId, data);
+    },
+    onSuccess: (response) => {
+      console.log("Template updated successfully:", response);
+      // Optional: Invalidate template queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["templates"] });
+    },
+    onError: (error) => {
+      console.error("Template update error:", error);
+      toast.error("Failed to update template", {
+        position: "top-center",
+        description: "Trade was added locally but couldn't be saved to the template.",
+      });
+    },
+  });
+
   // Variable mutation
   const { mutate: createVariableMutation } = useMutation({
     mutationFn: createVariable,
@@ -175,6 +198,24 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         const updatedVariables = [...localVariables, createdVariable];
         setLocalVariables(updatedVariables);
         updateVariables(updatedVariables);
+
+        // Update template when variable is created
+        console.log("Template ID:", templateId);
+        console.log("Updated variables after creation:", updatedVariables.map(v => v.id));
+        console.log("Current trades:", trades.map(t => t.id));
+        
+        if (templateId) {
+          console.log("Calling updateTemplateMutation after variable creation...");
+          updateTemplateMutation({
+            templateId: templateId,
+            data: {
+              trades: trades.map(t => t.id),
+              variables: updatedVariables.map(v => v.id),
+            }
+          });
+        } else {
+          console.log("Template ID is missing, cannot update template");
+        }
 
         // Call the pending callback if it exists, with proper error handling
         try {
@@ -192,7 +233,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
 
         toast.success("Variable created successfully", {
           position: "top-center",
-          description: `"${createdVariable.name}" has been added to your template.`,
+          description: `"${createdVariable.name}" has been added and saved to your template automatically.`,
         });
 
         // Invalidate the variables query to refresh the data
@@ -236,10 +277,30 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
             createdTrade.image = newTradeImage;
           }
           
-          updateTrades([...trades, createdTrade]);
+          const updatedTrades = [...trades, createdTrade];
+          updateTrades(updatedTrades);
+
+          // Update template with the new trades immediately
+          console.log("Template ID:", templateId);
+          console.log("Updated trades after creation:", updatedTrades.map(t => t.id));
+          console.log("Local variables:", localVariables.map(v => v.id));
+          
+          if (templateId) {
+            console.log("Calling updateTemplateMutation after trade creation...");
+            updateTemplateMutation({
+              templateId: templateId,
+              data: {
+                trades: updatedTrades.map(t => t.id),
+                variables: localVariables.map(v => v.id),
+              }
+            });
+          } else {
+            console.log("Template ID is missing, cannot update template");
+          }
+
           toast.success("Trade created successfully", {
             position: "top-center",
-            description: `"${createdTrade.name}" has been added to your template.`,
+            description: `"${createdTrade.name}" has been added and saved to your template automatically.`,
           });
           setShowAddTradeDialog(false);
           setNewTradeName("");
@@ -460,6 +521,24 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       const updatedVariables = [...localVariables, newVar];
       setLocalVariables(updatedVariables);
       updateVariables(updatedVariables);
+
+      // Update template when variable is selected
+      console.log("Template ID:", templateId);
+      console.log("Updated variables after selection:", updatedVariables.map(v => v.id));
+      console.log("Current trades:", trades.map(t => t.id));
+      
+      if (templateId) {
+        console.log("Calling updateTemplateMutation after variable selection...");
+        updateTemplateMutation({
+          templateId: templateId,
+          data: {
+            trades: trades.map(t => t.id),
+            variables: updatedVariables.map(v => v.id),
+          }
+        });
+      } else {
+        console.log("Template ID is missing, cannot update template");
+      }
     }
 
     setIsSearchOpen(false);
@@ -521,7 +600,29 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     };
 
     if (!trades.some((t) => t.id === newTrade.id)) {
-      updateTrades([...trades, newTrade]);
+      const updatedTrades = [...trades, newTrade];
+      
+      // Update local state first for immediate UI feedback
+      updateTrades(updatedTrades);
+
+      // Update template with the new trades immediately
+      console.log("Template ID:", templateId);
+      console.log("Updated trades:", updatedTrades.map(t => t.id));
+      console.log("Local variables:", localVariables.map(v => v.id));
+      
+      if (templateId) {
+        console.log("Calling updateTemplateMutation...");
+        updateTemplateMutation({
+          templateId: templateId,
+          data: {
+            trades: updatedTrades.map(t => t.id), // Send all trade IDs including the new one
+            variables: localVariables.map(v => v.id), // Include current variables
+            // Add other template fields as needed
+          }
+        });
+      } else {
+        console.log("Template ID is missing, cannot update template");
+      }
 
       // Auto-import variables from element formulas
       if (newTrade.elements && newTrade.elements.length > 0) {
@@ -531,7 +632,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         // Collect all variable names from element formulas
         const variablesToAdd: VariableResponse[] = [];
 
-        newTrade.elements.forEach((element) => {          // Extract variable names from material formula
+        newTrade.elements.forEach((element) => {
+          // Extract variable names from material formula
           if (element.material_cost_formula) {
             const materialFormulaVariableNames = extractVariableNamesFromFormula(
               replaceIdsWithNamesInFormula(
@@ -557,7 +659,9 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                 variablesToAdd.push(availableVariable);
               }
             });
-          }          // Extract variable names from labor formula
+          }
+
+          // Extract variable names from labor formula
           if (element.labor_cost_formula) {
             const laborFormulaVariableNames = extractVariableNamesFromFormula(
               replaceIdsWithNamesInFormula(
@@ -603,6 +707,11 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
           setTradeSkeletons((prev) => ({ ...prev, [newTrade.id]: false }));
         }, 1000);
       }
+
+      toast.success("Trade added to template", {
+        position: "top-center",
+        description: `"${newTrade.name}" has been added and saved to your template automatically.`,
+      });
     }
 
     setIsTradeSearchOpen(false);
@@ -610,7 +719,31 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   };
 
   const handleRemoveTrade = (tradeId: string) => {
-    updateTrades(trades.filter((t) => t.id !== tradeId));
+    const updatedTrades = trades.filter((t) => t.id !== tradeId);
+    updateTrades(updatedTrades);
+
+    // Update template when trade is removed
+    console.log("Template ID:", templateId);
+    console.log("Updated trades after removal:", updatedTrades.map(t => t.id));
+    console.log("Local variables:", localVariables.map(v => v.id));
+    
+    if (templateId) {
+      console.log("Calling updateTemplateMutation after trade removal...");
+      updateTemplateMutation({
+        templateId: templateId,
+        data: {
+          trades: updatedTrades.map(t => t.id),
+          variables: localVariables.map(v => v.id),
+        }
+      });
+    } else {
+      console.log("Template ID is missing, cannot update template");
+    }
+
+    toast.success("Trade removed from template", {
+      position: "top-center",
+      description: "Trade has been removed and template updated automatically.",
+    });
   };  const handleAddTrade = () => {
     if (!validateTradeForm()) return;
     
@@ -773,9 +906,33 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       );
       setLocalVariables(updatedVariables);
       updateVariables(updatedVariables);
+
+      // Update template when variable is removed
+      console.log("Template ID:", templateId);
+      console.log("Updated variables after removal:", updatedVariables.map(v => v.id));
+      console.log("Current trades:", trades.map(t => t.id));
+      
+      if (templateId) {
+        console.log("Calling updateTemplateMutation after variable removal...");
+        updateTemplateMutation({
+          templateId: templateId,
+          data: {
+            trades: trades.map(t => t.id),
+            variables: updatedVariables.map(v => v.id),
+          }
+        });
+      } else {
+        console.log("Template ID is missing, cannot update template");
+      }
+
       setShowRemoveVariableConfirm(false);
       setVariableToRemove(null);
       setElementsUsingVariable([]);
+
+      toast.success("Variable removed from template", {
+        position: "top-center",
+        description: "Variable has been removed and template updated automatically.",
+      });
     }
   };
 
@@ -826,12 +983,36 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     );
     setLocalVariables(updatedVariables);
     updateVariables(updatedVariables);
+
+    // Update template when variable is edited
+    console.log("Template ID:", templateId);
+    console.log("Updated variables after edit:", updatedVariables.map(v => v.id));
+    console.log("Current trades:", trades.map(t => t.id));
+    
+    if (templateId) {
+      console.log("Calling updateTemplateMutation after variable edit...");
+      updateTemplateMutation({
+        templateId: templateId,
+        data: {
+          trades: trades.map(t => t.id),
+          variables: updatedVariables.map(v => v.id),
+        }
+      });
+    } else {
+      console.log("Template ID is missing, cannot update template");
+    }
+
     setShowEditVariableDialog(false);
     setVariableToEdit(null);
     setNewVarName("");
     setNewVarDescription("");
     setNewVarDefaultValue(0);
     setNewVarDefaultVariableType("");
+
+    toast.success("Variable updated", {
+      position: "top-center",
+      description: "Variable has been updated and template saved automatically.",
+    });
   };
 
   // Add state for edit trade dialog
