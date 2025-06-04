@@ -1056,7 +1056,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       name: editVariableName.trim(),
       description: editVariableDescription.trim() || null,
       value: 0, // Templates always use 0 as default value
-      variable_type_id: editVariableType || null,
+      variable_type: editVariableType || null,
       formula: editVariableFormula || null,
     };
 
