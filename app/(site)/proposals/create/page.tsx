@@ -25,6 +25,7 @@ import StepIndicator from "@/components/features/create-proposal-page/step-indic
 
 import { createProposal } from "@/api-calls/proposals/create-proposal";
 import { updateTemplate } from "@/api-calls/templates/update-template";
+import { updateProposal } from "@/api-calls/proposals/update-proposal";
 import { TradeResponse } from "@/types/trades/dto";
 import { VariableResponse } from "@/types/variables/dto";
 import { TemplateResponse, TemplateUpdateRequest } from "@/types/templates/dto";
@@ -167,7 +168,6 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
       }
     }
   };
-
   const handleUpdateProposal = async () => {
     if (!createdProposal?.id) {
       toast.error("No proposal to update");
@@ -189,26 +189,26 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     };
 
     return new Promise((resolve, reject) => {
-      updateTemplateMutation(
+      updateProposalMutation.mutate(
         {
-          templateId: createdProposal.template?.id ?? "",
-          template: updatedProposalDetails,
+          proposalId: createdProposal.id,
+          proposal: updatedProposalDetails,
         },
         {
           onSuccess: async (data) => {
             try {
               const updatedProposal = await getProposalById(createdProposal.id);
               setCreatedProposal(updatedProposal.data);
-              toast.success("Proposal updated successfully!");
+              handleNext(); // Navigate to next step
               resolve(data);
             } catch (error) {
               console.error("Error refreshing proposal:", error);
-              reject(error);
+              handleNext(); // Navigate even if refresh fails
+              resolve(data);
             }
           },
           onError: (error) => {
             console.error("Error updating proposal:", error);
-            toast.error("Failed to update proposal");
             reject(error);
           },
         }
@@ -252,7 +252,6 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
       );
     },
   });
-
   const { mutate: updateTemplateMutation, isPending: isUpdatingTemplate } =
     useMutation({
       mutationFn: (data: {
@@ -269,6 +268,22 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
         });
       },
     });
+
+  const updateProposalMutation = useMutation({
+    mutationFn: (data: { proposalId: string; proposal: any }) =>
+      updateProposal(data.proposalId, data.proposal),
+    onSuccess: () => {
+      toast.success("Proposal updated successfully!", {
+        description: "Your proposal has been saved",
+      });
+    },
+    onError: (error: any) => {
+      toast.error("Failed to update proposal", {
+        description:
+          error instanceof Error ? error.message : "Please try again later",
+      });
+    },
+  });
   console.log("Created Proposal:", createdProposal);
   const handleCreateProposalAndContract = async () => {
     const errors = validateAllProposalFields(formData);
@@ -565,17 +580,24 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             <div className="flex justify-between mt-6">
               <Button variant="outline" onClick={handleBack}>
                 Back
-              </Button>
-              <Button
-                onClick={handleCreateProposalAndContract}
+              </Button>              <Button
+                onClick={() => {
+                  if (createdProposal?.id) {
+                    handleUpdateProposal();
+                  } else {
+                    handleCreateProposalAndContract();
+                  }
+                }}
                 disabled={
                   createProposalMutation.isPending ||
-                  createContractMutation.isPending
+                  createContractMutation.isPending ||
+                  updateProposalMutation.isPending
                 }
                 className="flex items-center gap-2"
               >
                 {createProposalMutation.isPending ||
-                createContractMutation.isPending ? (
+                createContractMutation.isPending ||
+                updateProposalMutation.isPending ? (
                   <>
                     <svg
                       className="animate-spin h-4 w-4 mr-2"
@@ -596,7 +618,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                         d="M4 12a8 8 0 018-8v8z"
                       />
                     </svg>
-                    Creating...
+                    {createdProposal?.id ? "Updating..." : "Creating..."}
                   </>
                 ) : (
                   "Next: Trades & Elements"
