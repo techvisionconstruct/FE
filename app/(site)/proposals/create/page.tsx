@@ -216,54 +216,6 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     });
   };
 
-  const handleUpdateProposal = async () => {
-    if (!createdProposal?.id) {
-      toast.error("No proposal to update");
-      return;
-    }
-
-    const updatedProposalDetails = {
-      name: formData.name,
-      description: formData.description,
-      status: formData.status,
-      image: formData.image,
-      client_name: formData.client_name,
-      client_email: formData.client_email,
-      client_phone: formData.client_phone,
-      client_address: formData.client_address,
-      valid_until: formData.valid_until,
-      location: formData.location,
-      template: formData.template?.id || null,
-    };
-
-    return new Promise((resolve, reject) => {
-      updateTemplateMutation(
-        {
-          templateId: createdProposal.template?.id ?? "",
-          template: updatedProposalDetails,
-        },
-        {
-          onSuccess: async (data) => {
-            try {
-              const updatedProposal = await getProposalById(createdProposal.id);
-              setCreatedProposal(updatedProposal.data);
-              toast.success("Proposal updated successfully!");
-              resolve(data);
-            } catch (error) {
-              console.error("Error refreshing proposal:", error);
-              reject(error);
-            }
-          },
-          onError: (error) => {
-            console.error("Error updating proposal:", error);
-            toast.error("Failed to update proposal");
-            reject(error);
-          },
-        }
-      );
-    });
-  };
-
   const handleBack = () => {
     if (currentStep === "details") {
       setCurrentStep("template");
