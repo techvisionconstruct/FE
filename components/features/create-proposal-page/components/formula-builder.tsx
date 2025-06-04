@@ -757,6 +757,15 @@ export function FormulaBuilder({
                             <Variable className="w-3.5 h-3.5 text-primary" />
                           )}
                           {displayName}
+                          {/* Add price for products */}
+                          {isProduct && item.price && (
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {new Intl.NumberFormat("en-US", {
+                                style: "currency",
+                                currency: "USD",
+                              }).format(parseFloat(item.price))}
+                            </span>
+                          )}
                         </span>
                         <div className="flex items-center gap-1">
                           {isCreateSuggestion && (
