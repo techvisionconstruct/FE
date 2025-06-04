@@ -50,7 +50,7 @@ import { VariableResponse } from "@/types/variables/dto";
 import { ElementResponse } from "@/types/elements/dto";
 import { TradeResponse } from "@/types/trades/dto";
 import { useFormula } from "./hooks/use-formula";
-import { EditVariableDialog } from "./components/edit-variable-dialog";
+import { EditVariableDialog } from "./edit-variable-dialog";
 import { ElementDialog } from "./components/element-dialog";
 import {
   Dialog as ConfirmDialog,
