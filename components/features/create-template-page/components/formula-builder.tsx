@@ -185,7 +185,6 @@ export function FormulaBuilder({
   const { data: productsData, isLoading } = useQuery(
     getProducts(1, 10, formulaInput)
   );
-
   const templateVariables = useMemo(() => {
     if (!variables) return [];
     return variables.filter(
@@ -456,11 +455,11 @@ export function FormulaBuilder({
     if (productsData?.data) {
       productMatches = (productsData.data as any[]).filter(
         (p) =>
-          p.title?.toLowerCase().includes(formulaInput.toLowerCase()) &&
+          p.search_term?.toLowerCase().includes(formulaInput.toLowerCase()) &&
           !validFormulaTokens.some(
             (token) =>
               token.type === "product" &&
-              token.text.toLowerCase() === p.title?.toLowerCase()
+              token.text.toLowerCase() === p.search_term?.toLowerCase()
           )
       );
 
@@ -505,6 +504,14 @@ export function FormulaBuilder({
       ...apiMatches.filter((v) => !v.is_global),
       ...productMatches
     );
+    console.log("Suggestions generated:", {
+      formulaInput,
+      templateMatches: templateMatches.length,
+      apiMatches: apiMatches.length,
+      productMatches: productMatches.length,
+      suggestionsCount: suggestions.length,
+      timestamp: new Date().toISOString()
+    });
 
     setSuggestions(suggestions);
 
@@ -703,6 +710,15 @@ export function FormulaBuilder({
                             <Variable className="w-3.5 h-3.5 text-primary" />
                           )}
                           {displayName}
+                          {/* Add price for products */}
+                          {isProduct && item.price && (
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {new Intl.NumberFormat("en-US", {
+                                style: "currency",
+                                currency: "USD",
+                              }).format(parseFloat(item.price))}
+                            </span>
+                          )}
                         </span>
                         <div className="flex items-center gap-1">
                           {isCreateSuggestion && (

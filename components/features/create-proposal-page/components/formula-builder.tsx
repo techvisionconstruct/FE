@@ -209,7 +209,8 @@ export function FormulaBuilder({
       .map((token) => ({
         ...token,
         // Ensure displayText is always present, fallback to text if missing
-        displayText: token.displayText !== undefined ? token.displayText : token.text
+        displayText:
+          token.displayText !== undefined ? token.displayText : token.text,
       }));
   }, [formulaTokens]);
   const addFormulaToken = (
@@ -229,7 +230,7 @@ export function FormulaBuilder({
       console.log("New variable token created:", {
         token: newToken,
         formulaType,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -279,7 +280,7 @@ export function FormulaBuilder({
         console.log("Requesting variable creation:", {
           name: name.trim(),
           formulaType,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
 
         // Pass the formula type to indicate which formula should get the new variable
@@ -316,10 +317,11 @@ export function FormulaBuilder({
       if (formulaInput.trim()) {
         const hasExactMatch = suggestions.some((item) => {
           const isProduct = "isProduct" in item && item.isProduct;
-          const isCreateSuggestion = "isCreateSuggestion" in item && item.isCreateSuggestion;
-          
+          const isCreateSuggestion =
+            "isCreateSuggestion" in item && item.isCreateSuggestion;
+
           if (isCreateSuggestion) return false;
-          
+
           const itemName = isProduct ? item.title : item.name;
           return itemName.toLowerCase() === formulaInput.trim().toLowerCase();
         });
@@ -328,22 +330,26 @@ export function FormulaBuilder({
           // Select the exact match
           const exactMatch = suggestions.find((item) => {
             const isProduct = "isProduct" in item && item.isProduct;
-            const isCreateSuggestion = "isCreateSuggestion" in item && item.isCreateSuggestion;
-            
+            const isCreateSuggestion =
+              "isCreateSuggestion" in item && item.isCreateSuggestion;
+
             if (isCreateSuggestion) return false;
-            
+
             const itemName = isProduct ? item.title : item.name;
             return itemName.toLowerCase() === formulaInput.trim().toLowerCase();
           });
-          
+
           if (exactMatch) {
             const isProduct = "isProduct" in exactMatch && exactMatch.isProduct;
-            
+
             if (isProduct) {
               addFormulaToken(exactMatch.id, exactMatch.title, "product");
             } else {
               // Add variable to template if not already present
-              if (updateVariables && !variables.some((v) => v.id === exactMatch.id)) {
+              if (
+                updateVariables &&
+                !variables.some((v) => v.id === exactMatch.id)
+              ) {
                 updateVariables((currentVariables) => {
                   if (currentVariables.some((v) => v.id === exactMatch.id)) {
                     return currentVariables;
@@ -365,11 +371,12 @@ export function FormulaBuilder({
       }
     } else if (e.key === "Tab" && suggestions.length > 0) {
       e.preventDefault();
-      
+
       // TAB behavior: Import first suggestion/exact match
       const selectedItem = suggestions[selectedSuggestion];
       const isProduct = "isProduct" in selectedItem && selectedItem.isProduct;
-      const isCreateSuggestion = "isCreateSuggestion" in selectedItem && selectedItem.isCreateSuggestion;
+      const isCreateSuggestion =
+        "isCreateSuggestion" in selectedItem && selectedItem.isCreateSuggestion;
 
       if (isCreateSuggestion) {
         // Handle create variable suggestion
@@ -456,11 +463,11 @@ export function FormulaBuilder({
     if (productsData?.data) {
       productMatches = (productsData.data as any[]).filter(
         (p) =>
-          p.title?.toLowerCase().includes(formulaInput.toLowerCase()) &&
+          p.search_term?.toLowerCase().includes(formulaInput.toLowerCase()) &&
           !validFormulaTokens.some(
             (token) =>
               token.type === "product" &&
-              token.text.toLowerCase() === p.title?.toLowerCase()
+              token.text.toLowerCase() === p.search_term?.toLowerCase()
           )
       );
 
@@ -480,10 +487,13 @@ export function FormulaBuilder({
       formulaInput.trim().length >= 2 &&
       isNaN(parseFloat(formulaInput)) &&
       !["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim()) &&
-      !variables.some(v => v.name.toLowerCase() === formulaInput.trim().toLowerCase()) &&
-      !validFormulaTokens.some(token =>
-        token.type === "variable" &&
-        token.text.toLowerCase() === formulaInput.trim().toLowerCase()
+      !variables.some(
+        (v) => v.name.toLowerCase() === formulaInput.trim().toLowerCase()
+      ) &&
+      !validFormulaTokens.some(
+        (token) =>
+          token.type === "variable" &&
+          token.text.toLowerCase() === formulaInput.trim().toLowerCase()
       );
 
     const suggestions = [];
@@ -534,20 +544,22 @@ export function FormulaBuilder({
     const pendingVariable = pendingVariableRef.current;
 
     // Look for a newly created variable that matches the pending name
-    const newVariable = variables.find(variable =>
-      variable.name.toLowerCase() === pendingVariable.name.toLowerCase() &&
-      // Only add if it's not already in the formula
-      !validFormulaTokens.some(token =>
-        token.type === "variable" &&
-        token.text.toLowerCase() === variable.name.toLowerCase()
-      )
+    const newVariable = variables.find(
+      (variable) =>
+        variable.name.toLowerCase() === pendingVariable.name.toLowerCase() &&
+        // Only add if it's not already in the formula
+        !validFormulaTokens.some(
+          (token) =>
+            token.type === "variable" &&
+            token.text.toLowerCase() === variable.name.toLowerCase()
+        )
     );
 
     if (newVariable) {
       console.log("Adding newly created variable to formula:", {
         variableName: newVariable.name,
         formulaType: pendingVariable.formulaType,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
 
       // Add the variable token to the formula
@@ -562,12 +574,13 @@ export function FormulaBuilder({
   return (
     <div>
       <div
-        className={`border rounded-lg p-3 flex flex-wrap gap-2 min-h-[65px] bg-background/50 relative transition-all ${hasError || validationError
-          ? "border-red-300 bg-red-50/50"
-          : isFormulaValid && validFormulaTokens.length > 0
+        className={`border rounded-lg p-3 flex flex-wrap gap-2 min-h-[65px] bg-background/50 relative transition-all ${
+          hasError || validationError
+            ? "border-red-300 bg-red-50/50"
+            : isFormulaValid && validFormulaTokens.length > 0
             ? "border-green-300 bg-green-50/50"
             : "hover:border-primary/30 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20"
-          }`}        
+        }`}
         onClick={() => inputRef.current?.focus()}
       >
         {validFormulaTokens.map((token) => {
@@ -575,7 +588,7 @@ export function FormulaBuilder({
           const displayText = token.displayText || token.text;
           const isLongText = displayText.length > 20;
           const isVeryLongText = displayText.length > 40;
-          
+
           return (
             <Badge
               key={token.id}
@@ -591,7 +604,11 @@ export function FormulaBuilder({
                   ? "bg-gradient-to-r from-green-500/5 to-green-500/10 text-green-700 border-green-500/20 shadow-sm"
                   : "bg-gray-100 text-gray-800 shadow-sm"
               } ${
-                isVeryLongText ? "max-w-[300px]" : isLongText ? "max-w-[200px]" : ""
+                isVeryLongText
+                  ? "max-w-[300px]"
+                  : isLongText
+                  ? "max-w-[200px]"
+                  : ""
               }`}
             >
               {token.type === "variable" ? (
@@ -603,18 +620,14 @@ export function FormulaBuilder({
               ) : token.type === "product" ? (
                 <Package className="w-3 h-3 mr-1 flex-shrink-0" />
               ) : null}
-              
-              <span 
-                className={`${
-                  isLongText 
-                    ? "truncate block" 
-                    : ""
-                }`}
+
+              <span
+                className={`${isLongText ? "truncate block" : ""}`}
                 title={isLongText ? displayText : undefined}
               >
                 {displayText}
               </span>
-              
+
               {/* Tooltip for long text */}
               {isLongText && (
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap max-w-[400px] text-center">
@@ -622,7 +635,7 @@ export function FormulaBuilder({
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               )}
-                <button
+              <button
                 type="button"
                 className="h-5 w-5 rounded-full hover:bg-white/80 flex items-center justify-center ml-0.5 transition-colors flex-shrink-0"
                 onClick={(e) => {
@@ -631,7 +644,8 @@ export function FormulaBuilder({
                 }}
                 aria-label={`Remove ${token.displayText}`}
               >
-                <X className="w-3 h-3" />              </button>
+                <X className="w-3 h-3" />{" "}
+              </button>
             </Badge>
           );
         })}
@@ -649,7 +663,8 @@ export function FormulaBuilder({
             setIsFocused(false);
             setTimeout(() => setShowSuggestions(false), 150);
             // Validate formula on blur only
-            const { isValid, errorMessage } = validateFormula(validFormulaTokens);
+            const { isValid, errorMessage } =
+              validateFormula(validFormulaTokens);
             if (!isValid && validFormulaTokens.length > 0) {
               setValidationError(errorMessage);
               if (onValidationError) onValidationError(errorMessage);
@@ -679,15 +694,20 @@ export function FormulaBuilder({
                 // Check if this is a product
                 const isProduct = "isProduct" in item && item.isProduct;
                 // Check if this is a "create variable" suggestion
-                const isCreateSuggestion = "isCreateSuggestion" in item && item.isCreateSuggestion;
+                const isCreateSuggestion =
+                  "isCreateSuggestion" in item && item.isCreateSuggestion;
 
-                const displayName = isProduct ? item.title :
-                  isCreateSuggestion ? item.displayText :
-                    item.name;
-                    
+                const displayName = isProduct
+                  ? item.title
+                  : isCreateSuggestion
+                  ? item.displayText
+                  : item.name;
+
                 // Check if this item is an exact match
-                const isExactMatch = !isCreateSuggestion && 
-                  displayName.toLowerCase() === formulaInput.trim().toLowerCase();
+                const isExactMatch =
+                  !isCreateSuggestion &&
+                  displayName.toLowerCase() ===
+                    formulaInput.trim().toLowerCase();
 
                 return (
                   <div
@@ -705,9 +725,14 @@ export function FormulaBuilder({
                         addFormulaToken(item.id, item.title, "product");
                       } else {
                         // Handle existing variable selection
-                        if (updateVariables && !variables.some((v) => v.id === item.id)) {
+                        if (
+                          updateVariables &&
+                          !variables.some((v) => v.id === item.id)
+                        ) {
                           updateVariables((currentVariables) => {
-                            if (currentVariables.some((v) => v.id === item.id)) {
+                            if (
+                              currentVariables.some((v) => v.id === item.id)
+                            ) {
                               return currentVariables;
                             }
                             return [...currentVariables, item];
@@ -742,17 +767,22 @@ export function FormulaBuilder({
                               Create
                             </Badge>
                           )}
-                          {!isProduct && !isCreateSuggestion &&
-                            !templateVariables.some((v) => v.id === item.id) && (
+                          {!isProduct &&
+                            !isCreateSuggestion &&
+                            !templateVariables.some(
+                              (v) => v.id === item.id
+                            ) && (
                               <Badge variant="outline" className="ml-2 text-xs">
                                 Will add to proposal
                               </Badge>
                             )}
-                          {!isProduct && !isCreateSuggestion && item.is_global && (
-                            <Badge variant="secondary" className="text-xs">
-                              Global
-                            </Badge>
-                          )}
+                          {!isProduct &&
+                            !isCreateSuggestion &&
+                            item.is_global && (
+                              <Badge variant="secondary" className="text-xs">
+                                Global
+                              </Badge>
+                            )}
                           {isProduct && (
                             <Badge
                               variant="secondary"
@@ -766,11 +796,15 @@ export function FormulaBuilder({
                       {!isProduct && !isCreateSuggestion && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {isExactMatch ? (
-                            <span className="text-xs text-green-600">Exact match</span>
+                            <span className="text-xs text-green-600">
+                              Exact match
+                            </span>
                           ) : (
                             <span className="text-xs text-muted-foreground">
-                              {displayName.toLowerCase().startsWith(formulaInput.toLowerCase()) 
-                                ? `Similar to "${formulaInput}"` 
+                              {displayName
+                                .toLowerCase()
+                                .startsWith(formulaInput.toLowerCase())
+                                ? `Similar to "${formulaInput}"`
                                 : `Contains "${formulaInput}"`}
                             </span>
                           )}
@@ -782,12 +816,14 @@ export function FormulaBuilder({
                         </span>
                         {isExactMatch && (
                           <span className="px-1.5 py-0.5 bg-muted/50 rounded">
-                            Press <span className="font-medium">Enter</span> to select
+                            Press <span className="font-medium">Enter</span> to
+                            select
                           </span>
                         )}
                         {isCreateSuggestion && (
                           <span className="px-1.5 py-0.5 bg-muted/50 rounded">
-                            Press <span className="font-medium">Enter</span> to create
+                            Press <span className="font-medium">Enter</span> to
+                            create
                           </span>
                         )}
                       </div>
@@ -829,8 +865,8 @@ export function FormulaBuilder({
                   </div>
                 </div>
               ) : ["+", "-", "*", "/", "(", ")", "^"].includes(
-                formulaInput.trim()
-              ) ? (
+                  formulaInput.trim()
+                ) ? (
                 <div
                   className="p-3 cursor-pointer hover:bg-accent"
                   onClick={() =>
@@ -851,9 +887,9 @@ export function FormulaBuilder({
                   </div>
                 </div>
               ) : variables.some(
-                (v) =>
-                  v.name.toLowerCase() === formulaInput.trim().toLowerCase()
-              ) ? (
+                  (v) =>
+                    v.name.toLowerCase() === formulaInput.trim().toLowerCase()
+                ) ? (
                 <div
                   className="p-3 cursor-pointer hover:bg-accent"
                   onClick={() => {
