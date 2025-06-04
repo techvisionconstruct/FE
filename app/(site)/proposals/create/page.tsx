@@ -14,7 +14,7 @@ import {
 } from "@/components/shared";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 import { Send } from "lucide-react";
 
 // Import our step components
@@ -464,6 +464,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                         return;
                       }
                       handleUpdateTemplate();
+                      redirect("/proposals");
                     }}
                   >
                     Save as Draft
@@ -500,29 +501,45 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
               )}
 
               {currentStep === "contract" && (
-                <Button
-                  variant="outline"
-                  className="mb-4"
-                  onClick={() => {
-                    sendProposalToClient();
-                  }}
-                  disabled={
-                    isSending ||
-                    (!createdProposal && !proposal) ||
-                    !(createdProposal?.client_email || proposal?.client_email)
-                  }
-                >
-                  {isSending ? (
-                    <span className="inline-flex items-center">
-                      <span className="animate-spin mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full"></span>
-                      Sending...
-                    </span>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" /> Send Contract to Client
-                    </>
-                  )}
-                </Button>
+                <>
+                  {" "}
+                  <Button
+                    onClick={() => {
+                      if (!validateVariables()) {
+                        setShowMissingVariablesDialog(true); // Show dialog if validation fails
+                        return;
+                      }
+                      handleUpdateTemplate();
+                      redirect("/proposals");
+                    }}
+                  >
+                    Save as Draft
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="mb-4"
+                    onClick={() => {
+                      sendProposalToClient();
+                    }}
+                    disabled={
+                      isSending ||
+                      (!createdProposal && !proposal) ||
+                      !(createdProposal?.client_email || proposal?.client_email)
+                    }
+                  >
+                    {isSending ? (
+                      <span className="inline-flex items-center">
+                        <span className="animate-spin mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full"></span>
+                        Sending...
+                      </span>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" /> Send Contract to
+                        Client
+                      </>
+                    )}
+                  </Button>
+                </>
               )}
             </div>
           )}
@@ -580,7 +597,8 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             <div className="flex justify-between mt-6">
               <Button variant="outline" onClick={handleBack}>
                 Back
-              </Button>              <Button
+              </Button>{" "}
+              <Button
                 onClick={() => {
                   if (createdProposal?.id) {
                     handleUpdateProposal();
@@ -635,7 +653,8 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
               <div className="variable-column">
                 {/* Variable column contents */}
               </div>
-            </div>            <TradesAndElementsStep
+            </div>{" "}
+            <TradesAndElementsStep
               data={{
                 trades: tradeObjects,
                 variables: variableObjects,
@@ -687,7 +706,8 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             <div className="flex justify-between mt-6">
               <Button variant="outline" onClick={handleBack}>
                 Back
-              </Button>              <Button
+              </Button>{" "}
+              <Button
                 onClick={handleNext}
                 disabled={isUpdatingTemplate || isElementsUpdating}
                 className="flex items-center gap-2"
@@ -711,8 +731,11 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                         className="opacity-75"
                         fill="currentColor"
                         d="M4 12a8 8 0 018-8v8z"
-                      />                    </svg>
-                    {isElementsUpdating ? "Waiting for elements..." : "Updating..."}
+                      />{" "}
+                    </svg>
+                    {isElementsUpdating
+                      ? "Waiting for elements..."
+                      : "Updating..."}
                   </>
                 ) : (
                   "Next: Create Contract"
@@ -727,7 +750,6 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             <CreateContract
               contract_id={contractId}
               proposal={createdProposal}
-              variables={variableObjects}
             />
 
             <div className="flex justify-between mt-6">
