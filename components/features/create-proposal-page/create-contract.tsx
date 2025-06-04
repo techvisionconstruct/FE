@@ -478,9 +478,11 @@ const EditableClientField: React.FC<EditableClientFieldProps> = ({
 export function CreateContract({
   contract_id,
   proposal,
+  variables,
 }: {
   contract_id: string;
   proposal: ProposalResponse | undefined;
+  variables: VariableResponse[] | undefined;
 }) {
   const { data: contract, isLoading: isContractLoading } = useQuery(
     getContract(contract_id as string)
@@ -1338,6 +1340,28 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
     );
   }
 
+  // Add this calculation function before the return statement
+  const calculateTotalProjectCost = useMemo(() => {
+    if (!proposal?.template?.trades) return 0;
+
+    let total = 0;
+    proposal.template.trades.forEach((trade: TradeResponse) => {
+      if (trade.elements) {
+        trade.elements.forEach((element: any) => {
+          const materialCost = parseFloat(element.material_cost || 0);
+          const laborCost = parseFloat(element.labor_cost || 0);
+
+          // Since material and labor costs already include markup, just add them
+          const elementTotal = materialCost + laborCost;
+
+          total += elementTotal;
+        });
+      }
+    });
+
+    return total;
+  }, [proposal?.template?.trades]);
+
   return (
     <div className="w-full mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -1462,7 +1486,10 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                       <div className="flex justify-between items-center">
                         <span className="text-sm">Total Project Cost</span>
                         <span className="font-bold text-xl">
-                          {proposal.total_cost || "N/A"}
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                          }).format(calculateTotalProjectCost)}
                         </span>
                       </div>
                       <Separator />
@@ -1511,8 +1538,8 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                 </div>
 
                 {/* Project Variables - Same as before */}
-                {proposal.template?.variables &&
-                  proposal.template?.variables.length > 0 && (
+                {variables &&
+                  variables.length > 0 && (
                     <div className="space-y-4 mt-4">
                       <h3 className="text-lg font-semibold">
                         Project Variables
@@ -1523,7 +1550,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
                           string,
                           VariableResponse[]
                         > = {};
-                        proposal.template.variables.forEach((variable) => {
+                        variables.forEach((variable) => {
                           const typeName =
                             variable.variable_type?.name || "Other";
                           if (!groupedVariables[typeName]) {
