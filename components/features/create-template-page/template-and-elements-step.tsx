@@ -24,6 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
   ImageUpload,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@/components/shared";
 import { toast } from "sonner";
 import {
@@ -34,6 +37,7 @@ import {
   Loader2,
   PlusCircle,
   ImageIcon,
+  HelpCircle,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAllVariables } from "@/api-calls/variables/get-all-variables";
@@ -1039,11 +1043,21 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Variables Section */}
         <div className="lg:col-span-1 space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
+          <Card>            <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center">
                 <Variable className="mr-2 h-5 w-5" />
                 <span>Template Variables</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="ml-2 h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs">
+                      Variables are dynamic values in your template that can be customized for each proposal. 
+                      They connect to trades and elements through formulas to calculate costs automatically.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1416,11 +1430,21 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
 
         {/* Trades and Elements Section */}
         <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
+          <Card>            <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center">
                 <BracesIcon className="mr-2 h-5 w-5" />
                 <span>Template Trades</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="ml-2 h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>                  <TooltipContent>
+                    <p className="max-w-xs">
+                      Trades represent the main services or products you offer (e.g., Framing, Electrical, Plumbing, 
+                      HVAC, Roofing, Drywall, Flooring). They use variables in their formulas to calculate pricing 
+                      and can contain multiple elements for detailed breakdowns.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1733,12 +1757,22 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                                 <div className="text-xs mt-1 mb-2 line-clamp-1">
                                   {trade.description}
                                 </div>
-                              )}
-
-                              <div className="mt-3 border-t pt-2">
+                              )}                              <div className="mt-3 border-t pt-2">
                                 <div className="flex items-center justify-between">
-                                  <div className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                                  <div className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide flex items-center">
                                     Elements
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <HelpCircle className="ml-1 h-3 w-3 text-muted-foreground cursor-help" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="max-w-xs">
+                                          Elements are the individual components within each trade. They use variables 
+                                          and formulas to calculate specific costs or quantities, providing detailed 
+                                          breakdowns of your trade pricing.
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
                                   </div>
                                 </div>
 
