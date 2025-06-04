@@ -351,7 +351,6 @@ export default function CreateTemplate() {
                 trades: tradeObjects,
                 variables: variableObjects,
               }}
-              templateId={templateId}
               updateTrades={(trades) => {
                 setTradeObjects(trades);
                 updateFormData(
