@@ -68,13 +68,6 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
       }
     }
 
-    // Update local state for location and client_address
-    if (field === "location") {
-      setLocalLocation(value);
-    } else if (field === "client_address") {
-      setLocalClientAddress(value);
-    }
-
     updateData({
       ...data,
       [field]: value,
@@ -112,37 +105,7 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
   };
 
   useEffect(() => {
-    setLocalLocation(data.location);
-    setLocalClientAddress(data.client_address);
-  }, [data.location, data.client_address]);
-
-  useEffect(() => {
-    // Check if Google Maps is already loaded
-    if (window.google && window.google.maps) {
-      initAutocomplete();
-      return;
-    }
-
-    // Check if script is already being loaded
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (existingScript) {
-      // If script exists, wait for it to load
-      const handleLoad = () => {
-        if (window.google && window.google.maps) {
-          initAutocomplete();
-        }
-      };
-      
-      if (existingScript.getAttribute('data-loaded') === 'true') {
-        initAutocomplete();
-      } else {
-        existingScript.addEventListener('load', handleLoad);
-        return () => existingScript.removeEventListener('load', handleLoad);
-      }
-      return;
-    }
-
-    // Load Google Maps script only if not already present
+    // Load Google Maps script
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
     script.async = true;
@@ -157,74 +120,55 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
     document.head.appendChild(script);
 
     return () => {
-      // Only remove script if it was added by this component instance
-      const scriptToRemove = document.querySelector(`script[src="${script.src}"]`);
-      if (scriptToRemove && scriptToRemove === script) {
-        document.head.removeChild(script);
-      }
+      // Cleanup script when component unmounts
+      document.head.removeChild(script);
     };
   }, []); // Remove data dependency to prevent re-loading
 
   // Update the initAutocomplete function to preserve other fields:
   const initAutocomplete = () => {
-    try {
-      // Check if Google Maps API is loaded
-      if (!window.google || !window.google.maps || !window.google.maps.places) {
-        console.warn('Google Maps API not fully loaded yet');
-        return;
-      }
+    // Project location autocomplete
+    if (autocompleteInput.current) {
+      const autocomplete = new window.google.maps.places.Autocomplete(
+        autocompleteInput.current,
+        {
+          types: ["address"],
+          componentRestrictions: { country: "us" },
+        }
+      );
 
-      // Project location autocomplete
-      if (autocompleteInput.current) {
-        const autocomplete = new window.google.maps.places.Autocomplete(
-          autocompleteInput.current,
-          {
-            types: ["address"],
-            componentRestrictions: { country: "us" },
-          }
-        );
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (place.formatted_address) {
+          // Only update the location field
+          updateData({
+            ...data,
+            location: place.formatted_address,
+          });
+        }
+      });
+    }
 
-        autocomplete.addListener("place_changed", () => {
-          const place = autocomplete.getPlace();
-          if (place.formatted_address) {
-            // Update local state to trigger re-render
-            setLocalLocation(place.formatted_address);
-            
-            // Update parent component state
-            updateData((prevData: any) => ({
-              ...prevData,
-              location: place.formatted_address,
-            }));
-          }
-        });
-      }
+    // Client address autocomplete
+    if (clientAddressInput.current) {
+      const clientAutocomplete = new window.google.maps.places.Autocomplete(
+        clientAddressInput.current,
+        {
+          types: ["address"],
+          componentRestrictions: { country: "us" },
+        }
+      );
 
-      // Client address autocomplete
-      if (clientAddressInput.current) {
-        const clientAutocomplete = new window.google.maps.places.Autocomplete(
-          clientAddressInput.current,
-          {
-            types: ["address"],
-            componentRestrictions: { country: "us" },
-          }
-        );
-
-        clientAutocomplete.addListener("place_changed", () => {
-          const place = clientAutocomplete.getPlace();
-          if (place.formatted_address) {
-            // Update local state to trigger re-render
-            setLocalClientAddress(place.formatted_address);
-            
-            // Update parent component state
-            updateData((prevData: any) => ({
-              ...prevData,
-              client_address: place.formatted_address,
-            }));
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error initializing Google Maps autocomplete:', error);
+      clientAutocomplete.addListener("place_changed", () => {
+        const place = clientAutocomplete.getPlace();
+        if (place.formatted_address) {
+          // Only update the client_address field
+          updateData({
+            ...data,
+            client_address: place.formatted_address,
+          });
+        }
+      });
     }
   };
 
@@ -424,11 +368,11 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
                 Client Address<span className="text-red-500">*</span>
               </Label>
               <div className="relative flex items-center gap-1">
-                <Input
+                <Textarea
                   ref={clientAddressInput}
                   id="client_address"
                   placeholder="Start typing to search for an address"
-                  value={localClientAddress}
+                  value={data.client_address}
                   onChange={(e) =>
                     handleChange("client_address", e.target.value)
                   }
