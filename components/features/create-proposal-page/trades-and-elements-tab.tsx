@@ -36,6 +36,7 @@ import AddTradeDialog from "./add-trade-dialog";
 import EditVariableDialog from "./edit-variable-dialog";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useDebounceCallback } from "@/hooks/use-debounce-callback";
 
 import { getAllVariables } from "@/api-calls/variables/get-all-variables";
 import { getAllVariableTypes } from "@/api-calls/variable-types/get-all-variable-types";
@@ -299,8 +300,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   const [newVarDefaultValue, setNewVarDefaultValue] = useState(0);
   const [newVarDescription, setNewVarDescription] = useState("");
   const [newVarDefaultVariableType, setNewVarDefaultVariableType] = useState("");
-  const [tradeSearchQuery, setTradeSearchQuery] = useState("");
-  const [isTradeSearchOpen, setIsTradeSearchOpen] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(-1);
   const [newTradeName, setNewTradeName] = useState("");
   const [newTradeDescription, setNewTradeDescription] = useState("");
@@ -310,8 +309,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   const [isProcessingTemplate, setIsProcessingTemplate] = useState(false);
   const [templateProcessed, setTemplateProcessed] = useState(false);
 
-  const [elementSearchQuery, setElementSearchQuery] = useState("");
-  const [isElementSearchOpen, setIsElementSearchOpen] = useState(false);
   const [elementSearchQueries, setElementSearchQueries] = useState<Record<string, string>>({});
   const [showAddElementDialog, setShowAddElementDialog] = useState(false);
   const [showEditElementDialog, setShowEditElementDialog] = useState(false);
@@ -333,7 +330,17 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   const [pendingVariableName, setPendingVariableName] = useState<string>("");
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  
+  const [tradeSearchQuery, setTradeSearchQuery] = useState("");
+  const [debouncedTradeSearchQuery, setDebouncedTradeSearchQuery] = useState("");
+  const [isTradeSearchOpen, setIsTradeSearchOpen] = useState(false);
+  
+  const [elementSearchQuery, setElementSearchQuery] = useState("");
+  const [debouncedElementSearchQuery, setDebouncedElementSearchQuery] = useState("");
+  const [isElementSearchOpen, setIsElementSearchOpen] = useState(false);
+
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddTradeDialog, setShowAddTradeDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -353,6 +360,41 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   // Force re-render trigger for cost calculations
   const [costUpdateTrigger, setCostUpdateTrigger] = useState(0);
 
+  // Debounced search callbacks
+  const debouncedVariableSearch = useDebounceCallback(
+    (query: string) => {
+      setDebouncedSearchQuery(query);
+    },
+    300
+  );
+  
+  const debouncedTradeSearch = useDebounceCallback(
+    (query: string) => {
+      setDebouncedTradeSearchQuery(query);
+    },
+    300
+  );
+  
+  const debouncedElementSearch = useDebounceCallback(
+    (query: string) => {
+      setDebouncedElementSearchQuery(query);
+    },
+    300
+  );
+
+  // Effect to trigger debounced searches
+  useEffect(() => {
+    debouncedVariableSearch(searchQuery);
+  }, [searchQuery, debouncedVariableSearch]);
+
+  useEffect(() => {
+    debouncedTradeSearch(tradeSearchQuery);
+  }, [tradeSearchQuery, debouncedTradeSearch]);
+
+  useEffect(() => {
+    debouncedElementSearch(elementSearchQuery);
+  }, [elementSearchQuery, debouncedElementSearch]);
+
   const toggleFormulaDisplay = (variableId: string) => {
     setShowingFormulaIds(prev => ({
       ...prev,
@@ -361,12 +403,12 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   };
 
   const { data: tradesData, isLoading: tradesLoading } = useQuery(
-    getTrades(1, 10, tradeSearchQuery)
+    getTrades(1, 10, debouncedTradeSearchQuery)
   );
   const { data: elementsData, isLoading: elementsLoading } = useQuery(
-    getElements(1, 10, elementSearchQuery)
+    getElements(1, 10, debouncedElementSearchQuery)
   );  const { data: searchVariablesData, isLoading: variablesLoading } = useQuery(
-    getVariables(1, 10, searchQuery)
+    getVariables(1, 10, debouncedSearchQuery)
   );
   const { data: productsData, isLoading: productsLoading } = useQuery(
     getProducts(1, 1000) // Get a large number to ensure we have all products for formulas
@@ -522,13 +564,32 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       mutationFn: createTrade,      onSuccess: (response) => {
         if (response && response.data) {
           const createdTrade = response.data;
-          updateTrades([...trades, createdTrade]);
+          const updatedTrades = [...trades, createdTrade];
+          updateTrades(updatedTrades);
           
           // Invalidate related queries to refetch updated data
           queryClient.invalidateQueries({ queryKey: ["trades"] });
           queryClient.invalidateQueries({ queryKey: ["elements"] });
           
-          toast.success("Trade created successfully", {
+          // Auto-update template with new trade
+          if (templateId) {
+            console.log("🔄 Auto-updating template after trade creation:", {
+              templateId,
+              tradesCount: updatedTrades.length,
+              variablesCount: variables.length,
+              tradeName: createdTrade.name
+            });
+            
+            updateTemplateMutation({
+              templateId: templateId,
+              data: { 
+                trades: updatedTrades.map((t) => t.id),
+                variables: variables.map((v) => v.id)
+              },
+            });
+          }
+          
+          toast.success("Trade created and template updated automatically", {
             position: "top-center",
             description: `"${createdTrade.name}" has been added to your proposal.`,
           });          setShowAddTradeDialog(false);
@@ -1200,10 +1261,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         // Refresh queries
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
-        queryClient.invalidateQueries({ queryKey: ["product"] });
-        
-        // Force cost recalculation
-        setCostUpdateTrigger(prev => prev + 1);
         
         toast.dismiss(loadingToast);
         toast.success(`Updated variable and ${results.length} elements`, {
@@ -1608,6 +1665,24 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
           });
         }
       }
+      
+      // Update template with new trade
+      if (templateId) {
+        console.log("🔄 Auto-updating template after trade selection:", {
+          templateId,
+          tradesCount: [...trades, newTrade].length,
+          variablesCount: variables.length,
+          tradeName: newTrade.name
+        });
+        
+        updateTemplateMutation({
+          templateId: templateId,
+          data: { 
+            trades: [...trades, newTrade].map((t) => t.id),
+            variables: variables.map((v) => v.id)
+          },
+        });
+      }
     }
 
     setIsTradeSearchOpen(false);
@@ -1615,7 +1690,33 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   };
 
   const handleRemoveTrade = (tradeId: string) => {
-    updateTrades(trades.filter((t) => t.id !== tradeId));
+    const updatedTrades = trades.filter((t) => t.id !== tradeId);
+    const removedTrade = trades.find((t) => t.id === tradeId);
+    
+    updateTrades(updatedTrades);
+    
+    // Auto-update template after trade removal
+    if (templateId) {
+      console.log("🔄 Auto-updating template after trade removal:", {
+        templateId,
+        tradesCount: updatedTrades.length,
+        variablesCount: variables.length,
+        removedTradeName: removedTrade?.name
+      });
+      
+      updateTemplateMutation({
+        templateId: templateId,
+        data: { 
+          trades: updatedTrades.map((t) => t.id),
+          variables: variables.map((v) => v.id)
+        },
+      });
+      
+      toast.success("Trade removed and template updated automatically", {
+        position: "top-center",
+        description: removedTrade ? `"${removedTrade.name}" has been removed from your proposal.` : "Trade removed successfully.",
+      });
+    }
   };
   const handleAddTrade = () => {
     if (!newTradeName.trim()) return;
