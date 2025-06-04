@@ -559,10 +559,8 @@ export function FormulaBuilder({
     }
   }, [variables, validFormulaTokens]);
 
-
-
   return (
-    <>
+    <div>
       <div
         className={`border rounded-lg p-3 flex flex-wrap gap-2 min-h-[65px] bg-background/50 relative transition-all ${hasError || validationError
           ? "border-red-300 bg-red-50/50"
@@ -645,22 +643,7 @@ export function FormulaBuilder({
               : "Type variables, products, numbers, or operators..."
           }
           className="border-0 shadow-none focus:outline-none focus:ring-0 p-0 h-9 text-sm flex-1 min-w-[40px] bg-transparent"
-        />
-
-        {validationError && (
-          <div className="absolute -bottom-6 left-0 text-xs text-red-500 flex items-center">
-            <AlertCircle className="w-3 h-3 mr-1" />
-            {validationError}
-          </div>
-        )}
-
-        {isFormulaValid && validFormulaTokens.length > 0 && (
-          <div className="absolute -bottom-6 left-0 text-xs text-green-600 flex items-center">
-            Valid formula
-          </div>
-        )}
-
-        {showSuggestions && formulaInput && (
+        />        {showSuggestions && formulaInput && (
           <div className="absolute left-0 top-full mt-1 z-20 w-full bg-background border rounded-md shadow-md max-h-[200px] overflow-y-auto">
             {suggestions.length > 0 ? (
               suggestions.map((item, index) => {
@@ -889,6 +872,20 @@ export function FormulaBuilder({
         )}
       </div>
 
+      {/* Validation messages in normal flow to prevent overlap */}
+      {validationError && (
+        <div className="text-xs text-red-500 flex items-center mt-1">
+          <AlertCircle className="w-3 h-3 mr-1" />
+          {validationError}
+        </div>
+      )}
+
+      {isFormulaValid && validFormulaTokens.length > 0 && !validationError && (
+        <div className="text-xs text-green-600 flex items-center mt-1">
+          Valid formula
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-1.5 mt-1">
         {["+", "-", "*", "/", "(", ")", "^"].map((op) => (
           <Button
@@ -908,6 +905,6 @@ export function FormulaBuilder({
         Type variable names, product names, numbers, or use the operator
         buttons.
       </div>
-    </>
+    </div>
   );
 }
