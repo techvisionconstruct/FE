@@ -4,10 +4,10 @@ import { VariableCreateRequest } from "@/types/variables/dto";
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const TOKEN = Cookies.get("auth-token");
 
 export async function createVariable(variable: VariableCreateRequest) {
   try {
+    const TOKEN = Cookies.get('auth-token');
     const payload: Record<string, any> = {};
     
     if (variable.name) payload.name = variable.name;

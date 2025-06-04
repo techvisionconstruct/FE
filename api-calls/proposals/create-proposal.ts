@@ -4,10 +4,10 @@ import { ProposalCreateRequest } from "@/types/proposals/dto";
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const TOKEN = Cookies.get("auth-token");
 
 export async function createProposal(proposal: ProposalCreateRequest) {
   try {
+    const TOKEN = Cookies.get('auth-token');
     const payload: Record<string, any> = {};
 
     if (proposal.name) payload.name = proposal.name;

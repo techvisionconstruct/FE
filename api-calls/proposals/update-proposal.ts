@@ -3,11 +3,11 @@
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const getAuthToken = () => Cookies.get('auth-token');
+
 
 export const updateProposal = async (id: string, data: any) => {
   try {
-    const token = getAuthToken();
+    const TOKEN = Cookies.get('auth-token');
     
     // Log what's being updated for debugging
     console.log(`Updating proposal ${id} with:`, data);
@@ -15,7 +15,7 @@ export const updateProposal = async (id: string, data: any) => {
     const response = await fetch(`${API_URL}/v1/proposals/update/${id}/`, {
       method: 'PUT',  // Changed to PUT since server only allows PUT requests
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${TOKEN}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(data)
