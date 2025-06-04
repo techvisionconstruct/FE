@@ -62,9 +62,8 @@ const EditElementDialog: React.FC<EditElementDialogProps> = ({
         body: JSON.stringify(data),
       }).then((res) => res.json());
     },    onSuccess: () => {
+      // Only invalidate elements query - trades will be updated through optimistic updates
       queryClient.invalidateQueries({ queryKey: ["elements"] });
-      queryClient.invalidateQueries({ queryKey: ["trades"] });
-      queryClient.invalidateQueries({ queryKey: ["product"] });
     },
   });
   const handleSubmit = (data: {
