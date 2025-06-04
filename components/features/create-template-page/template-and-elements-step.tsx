@@ -39,6 +39,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAllVariables } from "@/api-calls/variables/get-all-variables";
 import { getAllVariableTypes } from "@/api-calls/variable-types/get-all-variable-types";
 import { updateTrade } from "@/api-calls/trades/update-trade";
+import { updateVariable } from "@/api-calls/variables/update-variable";
 import { getAllTrades } from "@/api-calls/trades/get-all-trades";
 import { getAllElements } from "@/api-calls/elements/get-all-elements";
 import { createVariable } from "@/api-calls/variables/create-variable";
@@ -49,6 +50,7 @@ import { VariableResponse } from "@/types/variables/dto";
 import { ElementResponse } from "@/types/elements/dto";
 import { TradeResponse } from "@/types/trades/dto";
 import { useFormula } from "./hooks/use-formula";
+import { EditVariableDialog } from "./components/edit-variable-dialog";
 import { ElementDialog } from "./components/element-dialog";
 import {
   Dialog as ConfirmDialog,
@@ -89,10 +91,15 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     null
   );
   const [pendingVariableName, setPendingVariableName] = useState("");
-  const variables = data.variables || [];
-  const [pendingVariableCallback, setPendingVariableCallback] = useState<
+  const variables = data.variables || [];  const [pendingVariableCallback, setPendingVariableCallback] = useState<
     ((newVariable: VariableResponse) => void) | null
   >(null);
+  // Edit variable state for EditVariableDialog
+  const [showEditVariableDialog, setShowEditVariableDialog] = useState(false);
+  const [currentVariableId, setCurrentVariableId] = useState<string | null>(null);  const [editVariableName, setEditVariableName] = useState("");
+  const [editVariableDescription, setEditVariableDescription] = useState("");
+  const [editVariableType, setEditVariableType] = useState("");
+  const [editVariableFormula, setEditVariableFormula] = useState("");
 
   // Trade-related state
   const [tradeSearchQuery, setTradeSearchQuery] = useState("");
@@ -279,8 +286,44 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
             ? error.message
             : "An unexpected error occurred",
       });
-    },
-  });
+    },  });
+
+  // Variable update mutation
+  const { mutate: updateVariableMutation, isPending: isUpdatingVariable } =
+    useMutation({
+      mutationFn: ({ variableId, data }: { variableId: string; data: any }) =>
+        updateVariable(variableId, data),
+      onSuccess: (response) => {
+        if (response && response.data) {
+          const updatedVariable = response.data;
+          
+          // Update the variable in the local state
+          const updatedVariables = variables.map((variable) =>
+            variable.id === updatedVariable.id ? updatedVariable : variable
+          );
+          updateVariables(updatedVariables);
+
+          toast.success("Variable updated successfully", {
+            position: "top-center",
+            description: `"${updatedVariable.name}" has been updated.`,
+          });          setShowEditVariableDialog(false);
+          setCurrentVariableId(null);
+          setEditVariableName("");
+          setEditVariableDescription("");
+          setEditVariableType("");
+          setEditVariableFormula("");
+        }
+      },
+      onError: (error) => {
+        toast.error("Failed to update variable", {
+          position: "top-center",
+          description:
+            error instanceof Error
+              ? error.message
+              : "An unexpected error occurred",
+        });
+      },
+    });
 
   // Element update mutation
   const { mutate: updateElementMutation, isPending: isUpdatingElement } =
@@ -783,55 +826,43 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   const cancelRemoveVariable = () => {
     setShowRemoveVariableConfirm(false);
     setVariableToRemove(null);
-    setElementsUsingVariable([]);
+  setElementsUsingVariable([]);
   };
-
-  // Add state for edit variable dialog
-  const [showEditVariableDialog, setShowEditVariableDialog] = useState(false);
-  const [variableToEdit, setVariableToEdit] = useState<VariableResponse | null>(null);
-
   // Handler to open edit dialog and prefill form
   const handleOpenEditVariableDialog = (variable: VariableResponse) => {
-    setVariableToEdit(variable);
-    setNewVarName(variable.name);
-    setNewVarDescription(variable.description || "");
-    setNewVarDefaultValue(variable.value ?? 0);
-    setNewVarDefaultVariableType(variable.variable_type?.id?.toString() || "");
+    setCurrentVariableId(variable.id);
+    setEditVariableName(variable.name);
+    setEditVariableDescription(variable.description || "");
+    setEditVariableType(variable.variable_type?.id?.toString() || "");
+    setEditVariableFormula(variable.formula || "");
     setShowEditVariableDialog(true);
   };
 
   // Handler to submit edit
   const handleEditVariable = () => {
-    if (!validateVariableForm() || !variableToEdit) return;
-    const updatedVariable: VariableResponse = {
-      ...variableToEdit,
-      name: newVarName.trim(),
-      description: newVarDescription.trim() || undefined,
-      value: newVarDefaultValue,
-      variable_type: {
-        ...variableToEdit.variable_type,
-        id: newVarDefaultVariableType,
-        name: variableToEdit.variable_type?.name || "",
-        category: variableToEdit.variable_type?.category || "",
-        unit: variableToEdit.variable_type?.unit || "",
-        is_built_in: variableToEdit.variable_type?.is_built_in ?? false,
-        created_at: variableToEdit.variable_type?.created_at || "",
-        updated_at: variableToEdit.variable_type?.updated_at || "",
-        created_by: variableToEdit.variable_type?.created_by,
-        updated_by: variableToEdit.variable_type?.updated_by,
-      },
+    if (!currentVariableId) {
+      toast.error("No variable selected for editing");
+      return;
+    }
+
+    // Validate required fields
+    if (!editVariableName.trim()) {
+      toast.error("Variable name is required");
+      return;
+    }    // Prepare the update data
+    const updateData = {
+      name: editVariableName.trim(),
+      description: editVariableDescription.trim() || null,
+      value: 0, // Templates always use 0 as default value
+      variable_type_id: editVariableType || null,
+      formula: editVariableFormula || null,
     };
-    const updatedVariables = localVariables.map((v) =>
-      v.id === variableToEdit.id ? updatedVariable : v
-    );
-    setLocalVariables(updatedVariables);
-    updateVariables(updatedVariables);
-    setShowEditVariableDialog(false);
-    setVariableToEdit(null);
-    setNewVarName("");
-    setNewVarDescription("");
-    setNewVarDefaultValue(0);
-    setNewVarDefaultVariableType("");
+
+    // Call the mutation
+    updateVariableMutation({
+      variableId: currentVariableId,
+      data: updateData,
+    });
   };
 
   // Add state for edit trade dialog
@@ -919,12 +950,10 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
 
   // Add validation functions
   const validateVariableForm = () => {
-    const newErrors = { name: "", variable_type: "" };
-
-    // Exclude the variable being edited from the duplicate name check
+    const newErrors = { name: "", variable_type: "" };    // Exclude the variable being edited from the duplicate name check
     const duplicate = variables.some((v) =>
       v.name.toLowerCase() === newVarName.toLowerCase() &&
-      (!variableToEdit || v.id !== variableToEdit.id)
+      (!currentVariableId || v.id !== currentVariableId)
     );
 
     if (!newVarName.trim()) {
@@ -2152,127 +2181,42 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
             console.error("Error setting up variable creation:", err);
           }
         }}
-      />      <Dialog open={showEditVariableDialog} onOpenChange={setShowEditVariableDialog}>
-        <DialogContent className="sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <BracesIcon className="mr-2 h-4 w-4" />
-              Edit Template Variable
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-var-name">
-                Variable Name <span className="text-red-500">*</span>
-              </Label>
-              <div className="relative">
-                <Input
-                  id="edit-var-name"
-                  placeholder="Wall Length"
-                  value={newVarName}
-                  onChange={(e) => setNewVarName(e.target.value)}
-                  onBlur={() => handleVariableBlur("name")}
-                  className={
-                    variableErrors.name && variableTouched.name
-                      ? "border-red-500 pr-10"
-                      : "pr-10"
-                  }
-                />
-                {newVarName && (
-                  <button
-                    type="button"
-                    onClick={() => setNewVarName("")}
-                    className="absolute right-2 top-2.5 flex items-center focus:outline-none"
-                    tabIndex={-1}
-                    aria-label="Clear variable name"
-                  >
-                    <X className="h-4 w-4 text-gray-400 hover:text-red-500" />
-                  </button>
-                )}
-              </div>
-              {variableErrors.name && variableTouched.name && (
-                <p className="text-xs text-red-500">{variableErrors.name}</p>
-              )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-var-type">
-                Variable Type <span className="text-red-500">*</span>
-              </Label>
-              {isLoadingVariableTypes ? (
-                <div className="relative">
-                  <Select disabled>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Loading variable types..." />
-                    </SelectTrigger>
-                  </Select>
-                  <div className="text-xs text-muted-foreground flex items-center mt-1">
-                    <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                    Loading variable types...
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <Select
-                    value={newVarDefaultVariableType}
-                    onValueChange={setNewVarDefaultVariableType}
-                  >
-                    <SelectTrigger
-                      className={`w-full ${
-                        variableErrors.variable_type && variableTouched.variable_type
-                          ? "border-red-500"
-                          : ""
-                      }`}
-                    >
-                      <SelectValue placeholder="Select a variable type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.isArray((apiVariableTypes as any)?.data) ? (
-                        (apiVariableTypes as any).data.map((type: any) => (
-                          <SelectItem key={type.id} value={type.id.toString()}>
-                            {type.name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="default">Default Type</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {variableErrors.variable_type && variableTouched.variable_type && (
-                    <p className="text-xs text-red-500">{variableErrors.variable_type}</p>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-var-description">
-                Description <span className="text-gray-500">&#40;Optional&#41;</span>
-              </Label>
-              <Textarea
-                id="edit-var-description"
-                placeholder="What this variable represents (optional)"
-                value={newVarDescription}
-                onChange={(e) => setNewVarDescription(e.target.value)}
-                className="min-h-[80px]"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditVariableDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleEditVariable} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>      <Dialog open={showEditTradeDialog} onOpenChange={setShowEditTradeDialog}>
+      />      <EditVariableDialog
+        open={showEditVariableDialog}
+        onOpenChange={setShowEditVariableDialog}
+        onEditVariable={handleEditVariable}
+        variableId={currentVariableId || ""}
+        variableName={editVariableName}
+        setVariableName={setEditVariableName}
+        variableDescription={editVariableDescription}
+        setVariableDescription={setEditVariableDescription}
+        variableType={editVariableType}
+        setVariableType={setEditVariableType}
+        variableFormula={editVariableFormula}
+        setVariableFormula={setEditVariableFormula}
+        variableTypes={
+          Array.isArray((apiVariableTypes as any)?.data)
+            ? (apiVariableTypes as any).data
+            : []
+        }
+        isLoadingVariableTypes={isLoadingVariableTypes}
+        isUpdating={isUpdatingVariable}
+        onCancel={() => {
+          setShowEditVariableDialog(false);
+          setCurrentVariableId(null);
+        }}
+        variables={localVariables}
+        updateVariables={(updatedVariables) => {
+          if (typeof updatedVariables === "function") {
+            const newVars = updatedVariables(localVariables);
+            setLocalVariables(newVars);
+            updateVariables(newVars);
+          } else {
+            setLocalVariables(updatedVariables);
+            updateVariables(updatedVariables);
+          }
+        }}
+      /><Dialog open={showEditTradeDialog} onOpenChange={setShowEditTradeDialog}>
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center">
