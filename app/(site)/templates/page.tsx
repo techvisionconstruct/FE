@@ -3,11 +3,7 @@
 import { TemplateList } from "@/components/features/template-page/template-list-view";
 import { TemplateGridView } from "@/components/features/template-page/template-grid-view";
 import { TemplateLoader } from "@/components/features/template-page/loader";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useState } from "react";
 import {
   Tabs,
@@ -32,18 +28,28 @@ export default function TemplatesPage() {
 
   const queryClient = useQueryClient();
 
-  const { data: templates, isError, isPending } = useQuery(getTemplates());  const { mutate: deleteTemplateMutation, isPending: isDeleting } = useMutation({
-    mutationFn: (templateId: string) => deleteTemplate(templateId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["template"] });
-      toast.success("Template deleted successfully");
-    },
-    onError: (error: any) => {
-      console.error("Error deleting template:", error);
-      const errorMessage = error?.message || "Failed to delete template. Please try again.";
-      toast.error(errorMessage);
-    },
+  // Override staleTime for this specific page to get fresh data
+  const { data: templates, isError, isPending } = useQuery({
+    ...getTemplates(),
+    staleTime: 0, // Always fetch fresh data on this page
+    // Or use a very short staleTime:
+    // staleTime: 10 * 1000, // 10 seconds
   });
+  const { mutate: deleteTemplateMutation, isPending: isDeleting } = useMutation(
+    {
+      mutationFn: (templateId: string) => deleteTemplate(templateId),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["template"] });
+        toast.success("Template deleted successfully");
+      },
+      onError: (error: any) => {
+        console.error("Error deleting template:", error);
+        const errorMessage =
+          error?.message || "Failed to delete template. Please try again.";
+        toast.error(errorMessage);
+      },
+    }
+  );
 
   const startTour = () => {
     setIsTourRunning(true);
@@ -99,7 +105,8 @@ export default function TemplatesPage() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
-      </div>      <Tabs value={tab} onValueChange={setTab} className="w-full">
+      </div>{" "}
+      <Tabs value={tab} onValueChange={setTab} className="w-full">
         <TabsContent value="grid">
           <TemplateGridView
             templates={templateData}
@@ -108,14 +115,13 @@ export default function TemplatesPage() {
           />
         </TabsContent>
         <TabsContent value="list">
-          <TemplateList 
-            templates={templateData} 
+          <TemplateList
+            templates={templateData}
             onDeleteTemplate={deleteTemplateMutation}
             isDeleting={isDeleting}
           />
         </TabsContent>
       </Tabs>
-
       {/* ================ Template Tour Guide ================ */}
       <TemplateTour isRunning={isTourRunning} setIsRunning={setIsTourRunning} />
       <div className="fixed bottom-6 right-6">

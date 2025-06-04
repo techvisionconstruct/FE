@@ -35,10 +35,7 @@ import EditVariableDialog from "./edit-variable-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDebounceCallback } from "@/hooks/use-debounce-callback";
 
-import { getAllVariables } from "@/api-calls/variables/get-all-variables";
 import { getAllVariableTypes } from "@/api-calls/variable-types/get-all-variable-types";
-import { getAllTrades } from "@/api-calls/trades/get-all-trades";
-import { getAllElements } from "@/api-calls/elements/get-all-elements";
 
 import { createVariable } from "@/api-calls/variables/create-variable";
 import { updateVariable } from "@/api-calls/variables/update-variable";
@@ -433,10 +430,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     mutationFn: createVariable,
     onSuccess: (response) => {
       if (response && response.data) {
-        const createdVariable = response.data;        updateVariables([...variables, createdVariable]);        // Invalidate related queries to refetch updated data        queryClient.invalidateQueries({ queryKey: ["variables"] });
-        queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["trades"] });
-        queryClient.invalidateQueries({ queryKey: ["product"] }); // Fixed: was ["products"]
+        const createdVariable = response.data;        updateVariables([...variables, createdVariable]);        // Only invalidate variables query - other queries will be updated through optimistic updates        queryClient.invalidateQueries({ queryKey: ["variables"] });
         
         // Force cost recalculation
         setCostUpdateTrigger(prev => prev + 1);
@@ -564,9 +558,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
           const updatedTrades = [...trades, createdTrade];
           updateTrades(updatedTrades);
           
-          // Invalidate related queries to refetch updated data
+          // Only invalidate trades query - elements will be updated through optimistic updates
           queryClient.invalidateQueries({ queryKey: ["trades"] });
-          queryClient.invalidateQueries({ queryKey: ["elements"] });
           
           // Auto-update template with new trade
           if (templateId) {
@@ -615,11 +608,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         data: { elements: string[] };
       }) => updateTrade(tradeId, data),
       onSuccess: () => {
-        // Invalidate related queries to refetch updated data
+        // Optimized: Only invalidate trades query for trade updates
         queryClient.invalidateQueries({ queryKey: ["trades"] });
-        queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["product"] });
-
       },
     });
 
@@ -631,11 +621,10 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       }: {
         templateId: string;
         data: { variables?: string[]; trades?: string[] };
-      }) => updateProposalTemplate(templateId, data),      onSuccess: () => {        // Invalidate related queries to refetch updated data
+      }) => updateProposalTemplate(templateId, data),      onSuccess: () => {        
+        // Optimized: Reduce invalidations to only templates-related queries
         queryClient.invalidateQueries({ queryKey: ["variables"] });
         queryClient.invalidateQueries({ queryKey: ["trades"] });
-        queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["product"] });
         
         toast.success("Template updated successfully", {
           position: "top-center",
@@ -729,12 +718,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     useMutation({
       mutationFn: createElement,      onSuccess: (response) => {
         if (response && response.data) {
-          const createdElement = response.data;          // Invalidate related queries to refetch updated data
-          queryClient.invalidateQueries({ queryKey: ["elements"] });
-          queryClient.invalidateQueries({ queryKey: ["trades"] });
-          queryClient.invalidateQueries({ queryKey: ["variables"] });
-          queryClient.invalidateQueries({ queryKey: ["product"] });
-
+          const createdElement = response.data;          
+          // Update local state optimistically
           const updatedTrades = trades.map((trade) => {
             if (trade.id === currentTradeId) {
               return {
@@ -1059,11 +1044,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       created_by: variable.created_by,
       updated_by: variable.updated_by,
     };    if (!variables.some((v) => v.id === newVar.id)) {
-      const updatedVariables = [...variables, newVar];      updateVariables(updatedVariables);      // Invalidate queries when a variable is added
+      const updatedVariables = [...variables, newVar];      updateVariables(updatedVariables);      // Only invalidate specific queries that need fresh data
       queryClient.invalidateQueries({ queryKey: ["variables"] });
-      queryClient.invalidateQueries({ queryKey: ["elements"] });
-      queryClient.invalidateQueries({ queryKey: ["trades"] });
-      queryClient.invalidateQueries({ queryKey: ["product"] });
       
       // Force cost recalculation
       setCostUpdateTrigger(prev => prev + 1);
@@ -1080,11 +1062,11 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     setSearchQuery("");
   };
   const handleRemoveVariable = (variableId: string) => {
-    const updatedVariables = variables.filter((v) => v.id !== variableId);    updateVariables(updatedVariables);    // Invalidate queries when a variable is removed
+    const updatedVariables = variables.filter((v) => v.id !== variableId);
+    updateVariables(updatedVariables);
+    
+    // Optimized: Only invalidate variables query since other queries will update through relationships
     queryClient.invalidateQueries({ queryKey: ["variables"] });
-    queryClient.invalidateQueries({ queryKey: ["elements"] });
-    queryClient.invalidateQueries({ queryKey: ["trades"] });
-    queryClient.invalidateQueries({ queryKey: ["product"] });
     
     // Force cost recalculation
     setCostUpdateTrigger(prev => prev + 1);
@@ -1123,11 +1105,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       );
       
       if (hasChanges) {        updateVariables(updatedVariables);
-          // Invalidate queries when variables are updated due to formula calculations
+          // Only invalidate variables query when formulas are recalculated
         queryClient.invalidateQueries({ queryKey: ["variables"] });
-        queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["trades"] });
-        queryClient.invalidateQueries({ queryKey: ["product"] });
         
         // Force cost recalculation
         setCostUpdateTrigger(prev => prev + 1);
@@ -1369,7 +1348,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         }));
 
         updateTrades(updatedTrades);        queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["trades"] });
         
 
         if (showToast && loadingToast) {
@@ -1384,7 +1362,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         
 
         queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["trades"] });
         
 
         if (showToast && loadingToast) {
@@ -1438,9 +1415,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
           // Don't show toast for automatic synchronization
           applyGlobalMarkup(globalMarkupValue, false);
         } else {
-          // Even when disabling markup, refresh the queries
+          // Only invalidate elements query when disabling markup
           queryClient.invalidateQueries({ queryKey: ["elements"] });
-          queryClient.invalidateQueries({ queryKey: ["trades"] });
         }
       }, 100);
       
@@ -1520,9 +1496,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
           updateTrades(finalUpdatedTrades);
         }
 
-        // Invalidate queries (same as global markup)
+        // Only invalidate elements query - trades are updated through optimistic updates
         queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["trades"] });
         
         toast.success(`Markup updated to ${newMarkup}%`, {
           position: "top-center",
@@ -1553,9 +1528,8 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         
         updateTrades(revertedTrades);
 
-        // Invalidate queries even on error (same as global markup)
+        // Invalidate queries even on error (optimized to only elements)
         queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["trades"] });
         
         toast.error("Failed to save markup", {
           position: "top-center",
@@ -2058,8 +2032,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         
         // Invalidate queries after all elements are updated
         queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["trades"] });
-        queryClient.invalidateQueries({ queryKey: ["product"] });
         
         // Force cost recalculation
         setCostUpdateTrigger(prev => prev + 1);
@@ -2075,8 +2047,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         
         // Still invalidate queries and force recalculation
         queryClient.invalidateQueries({ queryKey: ["elements"] });
-        queryClient.invalidateQueries({ queryKey: ["trades"] });
-        queryClient.invalidateQueries({ queryKey: ["product"] });
         setCostUpdateTrigger(prev => prev + 1);
           toast.error('Failed to update all elements, but variable was updated');
       }
@@ -2848,7 +2818,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
                               // Removed individual toast since bulk update will handle it
                               
                               queryClient.invalidateQueries({ queryKey: ["elements"] });
-                              queryClient.invalidateQueries({ queryKey: ["trades"] });
                             })
                             .catch(error => {
                               console.error("Error updating element markup:", error);
