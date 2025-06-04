@@ -63,6 +63,7 @@ import { getElements } from "@/query-options/elements";
 import { ProductResponse } from "@/types/products/dto";
 import { cn } from "@/lib/utils";
 import { updateTemplate } from "@/api-calls/templates/update-template"; // Replace with your actual import path
+import { useDebounceCallback } from "@/hooks/use-debounce-callback";
 
 interface TradesAndElementsStepProps {
   data: {
@@ -146,15 +147,55 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   // Add with other states
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
 
+  // Debounced search state
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [debouncedTradeSearchQuery, setDebouncedTradeSearchQuery] = useState("");
+  const [debouncedElementSearchQuery, setDebouncedElementSearchQuery] = useState("");
+
+  // Debounced search callbacks
+  const debouncedVariableSearch = useDebounceCallback(
+    (query: string) => {
+      setDebouncedSearchQuery(query);
+    },
+    300
+  );
+
+  const debouncedTradeSearch = useDebounceCallback(
+    (query: string) => {
+      setDebouncedTradeSearchQuery(query);
+    },
+    300
+  );
+
+  const debouncedElementSearch = useDebounceCallback(
+    (query: string) => {
+      setDebouncedElementSearchQuery(query);
+    },
+    300
+  );
+
+  // Effect to trigger debounced searches
+  useEffect(() => {
+    debouncedVariableSearch(searchQuery);
+  }, [searchQuery, debouncedVariableSearch]);
+
+  useEffect(() => {
+    debouncedTradeSearch(tradeSearchQuery);
+  }, [tradeSearchQuery, debouncedTradeSearch]);
+
+  useEffect(() => {
+    debouncedElementSearch(elementSearchQuery);
+  }, [elementSearchQuery, debouncedElementSearch]);
+
   // API Queries
   const { data: tradesData, isLoading: tradesLoading } = useQuery(
-    getTrades(1, 10, tradeSearchQuery)
+    getTrades(1, 10, debouncedTradeSearchQuery)
   );
   const { data: elementsData, isLoading: elementsLoading } = useQuery(
-    getElements(1, 10, elementSearchQuery)
+    getElements(1, 10, debouncedElementSearchQuery)
   );
   const { data: variablesData, isLoading: variablesLoading } = useQuery(
-    getVariables(1, 10, searchQuery)
+    getVariables(1, 10, debouncedSearchQuery)
   );
 
   const { data: apiVariableTypes = [], isLoading: isLoadingVariableTypes } =
