@@ -30,11 +30,10 @@ const TemplateDetailsStep: React.FC<TemplateDetailsProps> = ({
   }>({
     name: false,
   });
-
   // Validation Form
   useEffect(() => {
     validateForm();
-  }, [data.name, touched]);
+  }, [data.name]);
 
   const validateForm = () => {
     const newErrors: { name?: string } = {};

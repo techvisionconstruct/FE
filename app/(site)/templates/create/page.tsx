@@ -30,6 +30,7 @@ export default function CreateTemplate() {
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTourRunning, setIsTourRunning] = useState(false);
+  const [isFormValid, setIsFormValid] = useState(true);
   const [formData, setFormData] = useState<TemplateCreateRequest>({
     name: "",
     description: "",
@@ -121,8 +122,16 @@ export default function CreateTemplate() {
       });
     },
   });
-
   const handleCreateTemplate = async () => {
+    // Check if template name is valid
+    if (!isFormValid) {
+      toast.error("Invalid template details", {
+        position: "top-center",
+        description: "Template name must be less than 100 characters."
+      });
+      return Promise.reject("Invalid template details");
+    }
+    
     setIsLoading(true);
 
     const templateDetails = {
@@ -155,12 +164,20 @@ export default function CreateTemplate() {
       });
     });
   };
-
   // --- Update handleUpdateTemplate to check for missing variables ---
   const handleUpdateTemplate = async (step = currentStep) => {
     if (!templateId) {
       toast.error("Template ID is missing");
       return Promise.reject("Template ID is missing");
+    }
+
+    // Check if template name is valid when updating from details step
+    if (step === "details" && !isFormValid) {
+      toast.error("Invalid template details", {
+        position: "top-center",
+        description: "Template name must be less than 100 characters."
+      });
+      return Promise.reject("Invalid template details");
     }
 
     setIsLoading(true);
@@ -304,8 +321,7 @@ export default function CreateTemplate() {
           />
         </div>
 
-        <Tabs value={currentStep} className="w-full">
-          <TabsContent value="details" className="p-6 details-tab-content">
+        <Tabs value={currentStep} className="w-full">          <TabsContent value="details" className="p-6 details-tab-content">
             <TemplateDetailsStep
               data={{
                 name: formData.name,
@@ -313,17 +329,17 @@ export default function CreateTemplate() {
                 image: formData.image, // Pass the image
               }}
               updateData={(data) => updateFormData("details", data)}
+              onValidationChange={setIsFormValid}
             />
             <div className="flex justify-end mt-6">
-              <Button
-                onClick={() => {
+              <Button                onClick={() => {
                   if (templateId) {
                     handleUpdateTemplate("details");
                   } else {
                     handleCreateTemplate();
                   }
                 }}
-                disabled={isLoading}
+                disabled={isLoading || !isFormValid}
               >
                 {isLoading ? (
                   <>
