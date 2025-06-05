@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -85,28 +85,35 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
   const [showFormulaBuilder, setShowFormulaBuilder] = useState(false);
   const [formulaError, setFormulaError] = useState<string | null>(null);
   
-  // Initialize formula tokens when dialog opens
+  // Stabilize variables reference to prevent infinite loops
+  const stableVariables = useMemo(() => variables, [variables]);
+  
+  // Initialize formula tokens when dialog opens - STABILIZED
   useEffect(() => {
-    if (open) {
-      if (variableFormula) {
-        const displayFormula = replaceVariableIdsWithNames(
-          variableFormula,
-          variables,
-          []
-        );
-        
-        setFormulaTokens(parseFormulaToTokens(displayFormula));
-        setShowFormulaBuilder(true);
-      } else {
-        setFormulaTokens([]);
-        setShowFormulaBuilder(false);
-      }
+    if (open && variableFormula) {
+      const displayFormula = replaceVariableIdsWithNames(
+        variableFormula,
+        stableVariables,
+        []
+      );
+      
+      setFormulaTokens(parseFormulaToTokens(displayFormula));
+      setShowFormulaBuilder(true);
+    } else if (open) {
+      setFormulaTokens([]);
+      setShowFormulaBuilder(false);
     }
-  }, [open, variableFormula, variables, parseFormulaToTokens, replaceVariableIdsWithNames]);  // Update formula string when tokens change
+  }, [open, variableFormula, parseFormulaToTokens, replaceVariableIdsWithNames]); // Remove stableVariables from deps
+
+  // Update formula string when tokens change - STABILIZED
   useEffect(() => {
     if (formulaTokens.length > 0) {
       const formulaString = tokensToFormulaString(formulaTokens);
-      setVariableFormula(formulaString);
+      
+      // Only update if the formula actually changed to prevent loops
+      if (formulaString !== variableFormula) {
+        setVariableFormula(formulaString);
+      }
       
       // Validate formula on change
       if (showFormulaBuilder) {
@@ -120,18 +127,62 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
           setFormulaError(`Formula ends with "${lastToken.text}" - please complete the formula`);
         }
       }
-    } else if (showFormulaBuilder) {
+    } else if (showFormulaBuilder && variableFormula) {
+      // Only clear if formula was previously set
       setVariableFormula("");
       setFormulaError(null);
     }
-  }, [formulaTokens, setVariableFormula, tokensToFormulaString, showFormulaBuilder, validateFormulaTokens]);
+  }, [formulaTokens, tokensToFormulaString, showFormulaBuilder, validateFormulaTokens]); // Remove setVariableFormula and variableFormula from deps
 
-  // Function to convert formula with names to IDs before saving
-  const prepareFormulaForSave = () => {
-    if (variableFormula && variables.length > 0) {
-      return replaceVariableNamesWithIds(variableFormula, variables);
+  // Function to convert formula with names to IDs before saving - STABILIZED
+  const prepareFormulaForSave = useCallback(() => {
+    if (variableFormula && stableVariables.length > 0) {
+      return replaceVariableNamesWithIds(variableFormula, stableVariables);
     }
     return variableFormula || "";
+  }, [variableFormula, stableVariables, replaceVariableNamesWithIds]);
+
+  // Enhanced onEditVariable function that closes dialog on success
+  const handleEditVariable = async () => {
+    if (variableName.trim()) {
+      if (showFormulaBuilder && formulaTokens.length > 0) {
+        // Additional validation check right when button is clicked
+        const lastToken = formulaTokens[formulaTokens.length - 1];
+        if (lastToken && lastToken.type === "operator" && 
+            ["+", "-", "*", "/", "(", "^"].includes(lastToken.text)) {
+          setFormulaError(`Formula ends with "${lastToken.text}" - please complete the formula`);
+          return;
+        }
+        
+        // Run validation one more time before submitting
+        const validation = validateFormulaTokens(formulaTokens);
+        if (!validation.isValid) {
+          setFormulaError(validation.error);
+          return;
+        }
+        
+        // Convert names to IDs before sending to parent component
+        const idFormula = prepareFormulaForSave();
+        setVariableFormula(idFormula);
+      }
+      
+      // Clear any existing formula errors
+      setFormulaError(null);
+      
+      try {
+        // Call the parent's edit function
+        await onEditVariable();
+        
+        // Close the dialog on successful update
+        onOpenChange(false);
+        
+        // Show success message
+        toast.success("Variable updated successfully!");
+      } catch (error) {
+        // Error handling is presumably done in the parent component
+        console.error("Error updating variable:", error);
+      }
+    }
   };
 
   return (
@@ -288,39 +339,9 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
         <DialogFooter>
           <Button variant="outline" onClick={onCancel}>
             Cancel
-          </Button>          <Button
-            onClick={() => {
-              if (variableName.trim()) {
-                if (showFormulaBuilder && formulaTokens.length > 0) {
-                  // Additional validation check right when button is clicked
-                  const lastToken = formulaTokens[formulaTokens.length - 1];
-                  if (lastToken && lastToken.type === "operator" && 
-                      ["+", "-", "*", "/", "(", "^"].includes(lastToken.text)) {
-                    setFormulaError(`Formula ends with "${lastToken.text}" - please complete the formula`);
-                    return;
-                  }
-                  
-                  // Run validation one more time before submitting
-                  const validation = validateFormulaTokens(formulaTokens);
-                  if (!validation.isValid) {
-                    setFormulaError(validation.error);
-                    return;
-                  }
-                  
-                  // Convert names to IDs before sending to parent component
-                  const idFormula = prepareFormulaForSave();
-                  setVariableFormula(idFormula);
-                }
-                
-                // Clear any existing formula errors
-                setFormulaError(null);
-                
-                // We don't show toast here since it will be handled in onEditVariable
-                // which triggers the parent component's handleEditVariable function
-                // that already shows a toast when the update is successful
-                onEditVariable();
-              }
-            }}
+          </Button>
+          <Button
+            onClick={handleEditVariable}
             disabled={
               isUpdating || 
               !variableName.trim() || 
