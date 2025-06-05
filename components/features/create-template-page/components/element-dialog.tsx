@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { ProductResponse } from "@/types/products/dto";
 import { useQuery } from "@tanstack/react-query";
 import { getProducts } from "@/query-options/products";
+import { getFormulaValidationMessage } from "@/components/utils/formula-validation-message";
 
 // Storage keys for formulas - make them unique to avoid conflicts
 const STORAGE_PREFIX = "element_dialog_";
@@ -489,29 +490,58 @@ export function ElementDialog({
     }
   }, [pendingVariableRef.current.variable]);
 
+  // Validate formulas whenever they change
+  useEffect(() => {
+    if (materialFormulaTokens.length > 0) {
+      const validation = validateFormulaTokens(materialFormulaTokens);
+      setMaterialFormulaError(validation.isValid ? null : validation.error);
+    } else {
+      setMaterialFormulaError(null);
+    }
+  }, [materialFormulaTokens, validateFormulaTokens]);
+
+  useEffect(() => {
+    if (laborFormulaTokens.length > 0) {
+      const validation = validateFormulaTokens(laborFormulaTokens);
+      setLaborFormulaError(validation.isValid ? null : validation.error);
+    } else {
+      setLaborFormulaError(null);
+    }
+  }, [laborFormulaTokens, validateFormulaTokens]);
   const handleSubmit = () => {
     if (!name.trim()) return;
 
-    // Validate formulas
+    // Validate formulas right before submission
+    let hasFormulaError = false;
+
     if (materialFormulaTokens.length > 0) {
+      // Run validation one more time before submitting
       const materialValidation = validateFormulaTokens(materialFormulaTokens);
       if (!materialValidation.isValid) {
+        // Update the error state to trigger button disabling
+        setMaterialFormulaError(materialValidation.error);
         toast.error("Material formula error", {
           description: materialValidation.error || "Invalid formula",
         });
-        return;
+        hasFormulaError = true;
       }
     }
 
     if (laborFormulaTokens.length > 0) {
+      // Run validation one more time before submitting
       const laborValidation = validateFormulaTokens(laborFormulaTokens);
       if (!laborValidation.isValid) {
+        // Update the error state to trigger button disabling
+        setLaborFormulaError(laborValidation.error);
         toast.error("Labor formula error", {
           description: laborValidation.error || "Invalid formula",
         });
-        return;
+        hasFormulaError = true;
       }
     }
+    
+    // Exit if there are formula errors
+    if (hasFormulaError) return;
 
     const materialFormula = tokensToFormulaString(materialFormulaTokens);
     const laborFormula = tokensToFormulaString(laborFormulaTokens);
@@ -857,12 +887,6 @@ export function ElementDialog({
                 Material Cost Formula{" "}
                 <span className="text-gray-500">&#40;Optional&#41;</span>
               </span>
-              {materialFormulaError && (
-                <span className="text-xs text-red-500 font-normal flex items-center">
-                  <AlertCircle className="h-3 w-3 mr-1" />{" "}
-                  {materialFormulaError}
-                </span>
-              )}
             </Label>
             <FormulaBuilder
               formulaTokens={materialFormulaTokens}
@@ -881,8 +905,9 @@ export function ElementDialog({
                 handleCreateVariable(name, "material");
               }}
               formulaType="material"
-              onValidationError={setMaterialFormulaError} // NEW
+              onValidationError={setMaterialFormulaError}
             />
+            {/* No error message here; FormulaBuilder handles it. */}
           </div>
 
           {/* Labor Cost Formula */}
@@ -894,11 +919,6 @@ export function ElementDialog({
               <span className="text-sm font-medium flex items-center">
                 Labor Cost Formula <span className="text-gray-500">&#40;Optional&#41;</span>
               </span>
-              {laborFormulaError && (
-                <span className="text-xs text-red-500 font-normal flex items-center">
-                  <AlertCircle className="h-3 w-3 mr-1" /> {laborFormulaError}
-                </span>
-              )}
             </Label>
             <FormulaBuilder
               formulaTokens={laborFormulaTokens}
@@ -919,6 +939,7 @@ export function ElementDialog({
               formulaType="labor"
               onValidationError={setLaborFormulaError}
             />
+            {/* No error message here; FormulaBuilder handles it. */}
           </div>
         </div>
         <DialogFooter>
@@ -930,10 +951,35 @@ export function ElementDialog({
             }}
           >
             Cancel
-          </Button>
-          <Button
-            onClick={handleSubmitWithImage}
-            disabled={isSubmitting || !name.trim()}
+          </Button>          <Button
+            onClick={() => {
+              // Additional validation check right when button is clicked
+              if (materialFormulaTokens.length > 0) {
+                const lastMaterialToken = materialFormulaTokens[materialFormulaTokens.length - 1];
+                if (lastMaterialToken && lastMaterialToken.type === "operator" && 
+                    ["+", "-", "*", "/", "(", "^"].includes(lastMaterialToken.text)) {
+                  setMaterialFormulaError(`Formula ends with "${lastMaterialToken.text}" - please complete the formula`);
+                  return;
+                }
+              }
+              
+              if (laborFormulaTokens.length > 0) {
+                const lastLaborToken = laborFormulaTokens[laborFormulaTokens.length - 1];
+                if (lastLaborToken && lastLaborToken.type === "operator" && 
+                    ["+", "-", "*", "/", "(", "^"].includes(lastLaborToken.text)) {
+                  setLaborFormulaError(`Formula ends with "${lastLaborToken.text}" - please complete the formula`);
+                  return;
+                }
+              }
+              
+              handleSubmitWithImage();
+            }}
+            disabled={
+              isSubmitting || 
+              !name.trim() || 
+              !!materialFormulaError || 
+              !!laborFormulaError
+            }
           >
             {isSubmitting ? (
               <>

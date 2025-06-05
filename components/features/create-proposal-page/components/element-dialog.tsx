@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { ProductResponse } from "@/types/products/dto";
 import { useQuery } from "@tanstack/react-query";
 import { getProducts } from "@/query-options/products";
+import { getFormulaValidationMessage } from "@/components/utils/formula-validation-message";
 
 // Define a more specific type for pending variables
 interface PendingVariable {
@@ -389,6 +390,25 @@ export function ElementDialog({
     }
   }, [materialFormulaTokens, laborFormulaTokens, isOpen]);
 
+  // Validate formulas whenever they change
+  useEffect(() => {
+    if (materialFormulaTokens.length > 0) {
+      const validation = validateFormulaTokens(materialFormulaTokens);
+      setMaterialFormulaError(validation.isValid ? null : validation.error);
+    } else {
+      setMaterialFormulaError(null);
+    }
+  }, [materialFormulaTokens, validateFormulaTokens]);
+
+  useEffect(() => {
+    if (laborFormulaTokens.length > 0) {
+      const validation = validateFormulaTokens(laborFormulaTokens);
+      setLaborFormulaError(validation.isValid ? null : validation.error);
+    } else {
+      setLaborFormulaError(null);
+    }
+  }, [laborFormulaTokens, validateFormulaTokens]);
+
   // Detect when initialName changes while the dialog is open
   useEffect(() => {
     // Only update if dialog is open and initialName changes
@@ -477,30 +497,40 @@ export function ElementDialog({
     setMaterialFormulaTokens,
     setLaborFormulaTokens
   ]);
-
   const handleSubmit = () => {
     if (!name.trim()) return;
 
-    // Validate formulas
+    // Validate formulas right before submission
+    let hasFormulaError = false;
+
     if (materialFormulaTokens.length > 0) {
+      // Run validation one more time before submitting
       const materialValidation = validateFormulaTokens(materialFormulaTokens);
       if (!materialValidation.isValid) {
+        // Update the error state to trigger button disabling
+        setMaterialFormulaError(materialValidation.error);
         toast.error("Material formula error", {
           description: materialValidation.error || "Invalid formula"
         });
-        return;
+        hasFormulaError = true;
       }
     }
 
     if (laborFormulaTokens.length > 0) {
+      // Run validation one more time before submitting
       const laborValidation = validateFormulaTokens(laborFormulaTokens);
       if (!laborValidation.isValid) {
+        // Update the error state to trigger button disabling
+        setLaborFormulaError(laborValidation.error);
         toast.error("Labor formula error", {
           description: laborValidation.error || "Invalid formula"
         });
-        return;
+        hasFormulaError = true;
       }
     }
+    
+    // Exit if there are formula errors
+    if (hasFormulaError) return;
 
     const materialFormula = tokensToFormulaString(materialFormulaTokens);
     const laborFormula = tokensToFormulaString(laborFormulaTokens);
@@ -765,8 +795,7 @@ export function ElementDialog({
           </div>
 
           {/* Material Cost Formula */}
-          <div className="grid gap-3">
-            <Label
+          <div className="grid gap-3">            <Label
               htmlFor="material-formula"
               className="flex items-center justify-between"
             >
@@ -774,14 +803,7 @@ export function ElementDialog({
                 Material Cost Formula{" "}
                 <span className="text-gray-500">&#40;Optional&#41;</span>
               </span>
-              {materialFormulaError && (
-                <span className="text-xs text-red-500 font-normal flex items-center">
-                  <AlertCircle className="h-3 w-3 mr-1" />{" "}
-                  {materialFormulaError}
-                </span>
-              )}
-            </Label>
-            <FormulaBuilder
+            </Label><FormulaBuilder
               formulaTokens={materialFormulaTokens}
               setFormulaTokens={(tokens) => {
                 setMaterialFormulaTokens(tokens);
@@ -792,31 +814,21 @@ export function ElementDialog({
               updateVariables={updateVariables}
               hasError={!!materialFormulaError}
               onCreateVariable={(name) => {
-                console.log(`Creating variable: ${name} for material formula`);
                 handleCreateVariable(name, "material");
               }}
-              formulaType="material"
-              onValidationError={setMaterialFormulaError}
+              formulaType="material"              onValidationError={setMaterialFormulaError}
             />
           </div>
 
           {/* Labor Cost Formula */}
-          <div className="grid gap-3">
-            <Label
+          <div className="grid gap-3">            <Label
               htmlFor="labor-formula"
               className="flex items-center justify-between"
             >
               <span className="text-sm font-medium flex items-center">
-                Labor Cost Formula{" "}
-                <span className="text-gray-500">&#40;Optional&#41;</span>
+                Labor Cost Formula <span className="text-gray-500">&#40;Optional&#41;</span>
               </span>
-              {laborFormulaError && (
-                <span className="text-xs text-red-500 font-normal flex items-center">
-                  <AlertCircle className="h-3 w-3 mr-1" /> {laborFormulaError}
-                </span>
-              )}
-            </Label>
-            <FormulaBuilder
+            </Label><FormulaBuilder
               formulaTokens={laborFormulaTokens}
               setFormulaTokens={(tokens) => {
                 setLaborFormulaTokens(tokens);
@@ -827,11 +839,9 @@ export function ElementDialog({
               updateVariables={updateVariables}
               hasError={!!laborFormulaError}
               onCreateVariable={(name) => {
-                console.log(`Creating variable: ${name} for labor formula`);
                 handleCreateVariable(name, "labor");
               }}
-              formulaType="labor"
-              onValidationError={setLaborFormulaError}
+              formulaType="labor"              onValidationError={setLaborFormulaError}
             />
           </div>
 
@@ -902,8 +912,36 @@ export function ElementDialog({
             onOpenChange(false);
           }}>
             Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting || !name.trim()}>
+          </Button>          <Button 
+            onClick={() => {
+              // Additional validation check right when button is clicked
+              if (materialFormulaTokens.length > 0) {
+                const lastMaterialToken = materialFormulaTokens[materialFormulaTokens.length - 1];
+                if (lastMaterialToken && lastMaterialToken.type === "operator" && 
+                    ["+", "-", "*", "/", "(", "^"].includes(lastMaterialToken.text)) {
+                  setMaterialFormulaError(`Formula ends with "${lastMaterialToken.text}" - please complete the formula`);
+                  return;
+                }
+              }
+              
+              if (laborFormulaTokens.length > 0) {
+                const lastLaborToken = laborFormulaTokens[laborFormulaTokens.length - 1];
+                if (lastLaborToken && lastLaborToken.type === "operator" && 
+                    ["+", "-", "*", "/", "(", "^"].includes(lastLaborToken.text)) {
+                  setLaborFormulaError(`Formula ends with "${lastLaborToken.text}" - please complete the formula`);
+                  return;
+                }
+              }
+              
+              handleSubmit();
+            }}
+            disabled={
+              isSubmitting || 
+              !name.trim() || 
+              !!materialFormulaError || 
+              !!laborFormulaError
+            }
+          >
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
