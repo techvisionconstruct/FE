@@ -214,8 +214,10 @@ export const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
                 value={variableDescription}
                 onChange={(e) => setVariableDescription(e.target.value)}
                 className="min-h-[80px]"
-              />
-            </div>            {/* Formula field hidden for template creation - formulas are handled in proposal creation */}
+              />            </div>            {/* Formula field hidden for template creation - formulas are handled in proposal creation */}
+            <div className="mt-1 text-xs text-muted-foreground">
+              <span>Formulas are set in the proposal, not in the template.</span>
+            </div>
           </div>
 
           <DialogFooter>

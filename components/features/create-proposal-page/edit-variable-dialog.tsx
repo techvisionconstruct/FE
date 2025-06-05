@@ -21,6 +21,7 @@ import { BracesIcon, Loader2, Calculator, X } from "lucide-react";
 import { FormulaBuilder } from "./components/formula-builder";
 import { useFormula } from "./hooks/use-formula";
 import { toast } from "sonner";
+import { getFormulaValidationMessage } from "@/components/utils/formula-validation-message";
 
 interface VariableType {
   id: string;
@@ -101,17 +102,29 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
         setShowFormulaBuilder(false);
       }
     }
-  }, [open, variableFormula, variables, parseFormulaToTokens, replaceVariableIdsWithNames]);
-  
-  // Update formula string when tokens change
+  }, [open, variableFormula, variables, parseFormulaToTokens, replaceVariableIdsWithNames]);  // Update formula string when tokens change
   useEffect(() => {
     if (formulaTokens.length > 0) {
       const formulaString = tokensToFormulaString(formulaTokens);
       setVariableFormula(formulaString);
+      
+      // Validate formula on change
+      if (showFormulaBuilder) {
+        const validation = validateFormulaTokens(formulaTokens);
+        setFormulaError(validation.isValid ? null : validation.error);
+        
+        // Force a revalidation of the formula for operations that appear at the end
+        const lastToken = formulaTokens[formulaTokens.length - 1];
+        if (lastToken && lastToken.type === "operator" && 
+            ["+", "-", "*", "/", "(", "^"].includes(lastToken.text)) {
+          setFormulaError(`Formula ends with "${lastToken.text}" - please complete the formula`);
+        }
+      }
     } else if (showFormulaBuilder) {
       setVariableFormula("");
+      setFormulaError(null);
     }
-  }, [formulaTokens, setVariableFormula, tokensToFormulaString, showFormulaBuilder]);
+  }, [formulaTokens, setVariableFormula, tokensToFormulaString, showFormulaBuilder, validateFormulaTokens]);
 
   // Function to convert formula with names to IDs before saving
   const prepareFormulaForSave = () => {
@@ -215,13 +228,12 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
                   hasError={!!formulaError}
                   excludeVariableName={variableName}
                   excludeProducts={true}
+                  onValidationError={setFormulaError}
                   onCreateVariable={(name) => {
                     // Handle variable creation if needed
                   }}
                 />
-                {formulaError && (
-                  <p className="text-xs text-red-500">{formulaError}</p>
-                )}
+                {/* No error message here; FormulaBuilder handles it. */}
               </div>
             ) : (
               <div className="relative">
@@ -280,6 +292,15 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
             onClick={() => {
               if (variableName.trim()) {
                 if (showFormulaBuilder && formulaTokens.length > 0) {
+                  // Additional validation check right when button is clicked
+                  const lastToken = formulaTokens[formulaTokens.length - 1];
+                  if (lastToken && lastToken.type === "operator" && 
+                      ["+", "-", "*", "/", "(", "^"].includes(lastToken.text)) {
+                    setFormulaError(`Formula ends with "${lastToken.text}" - please complete the formula`);
+                    return;
+                  }
+                  
+                  // Run validation one more time before submitting
                   const validation = validateFormulaTokens(formulaTokens);
                   if (!validation.isValid) {
                     setFormulaError(validation.error);
@@ -291,13 +312,20 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
                   setVariableFormula(idFormula);
                 }
                 
+                // Clear any existing formula errors
+                setFormulaError(null);
+                
                 // We don't show toast here since it will be handled in onEditVariable
                 // which triggers the parent component's handleEditVariable function
                 // that already shows a toast when the update is successful
                 onEditVariable();
               }
             }}
-            disabled={isUpdating}
+            disabled={
+              isUpdating || 
+              !variableName.trim() || 
+              (showFormulaBuilder && !!formulaError)
+            }
           >
             {isUpdating ? (
               <>
