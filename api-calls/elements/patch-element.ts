@@ -11,7 +11,14 @@ export async function patchElement(
     const TOKEN = Cookies.get('auth-token');
     // Only include fields that are provided (not undefined)
     const payload = Object.fromEntries(
-      Object.entries(element).filter(([_, value]) => value !== undefined)
+      Object.entries(element).filter(([key, value]) => {
+        // Always include formula fields even if they're empty strings
+        if (key === 'material_cost_formula' || key === 'labor_cost_formula') {
+          return value !== undefined;
+        }
+        // For other fields, filter out undefined values
+        return value !== undefined;
+      })
     );
 
     console.log("Sending element patch payload:", payload);
