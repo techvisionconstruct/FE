@@ -92,25 +92,27 @@ useEffect(() => {
     }));
   };
 
-  const handleNext = () => {
-    if (currentStep === "details") {
-      setCurrentStep("trades");
-    } else if (currentStep === "trades") {
-      // Validation: At least 1 trade and each trade must have at least 1 element
-      if (tradeObjects.length < 1) {
-        toast.error("Please add at least one trade before proceeding.");
-        return;
-      }
-      const hasTradeWithoutElement = tradeObjects.some(
-        (trade) => !trade.elements || trade.elements.length < 1
-      );
-      if (hasTradeWithoutElement) {
-        toast.error("Each trade must have at least one element.");
-        return;
-      }
-      setCurrentStep("preview");
+  const handleNext = async () => {
+  if (currentStep === "details") {
+    setCurrentStep("trades");
+  } else if (currentStep === "trades") {
+    if (tradeObjects.length < 1) {
+      toast.error("Please add at least one trade before proceeding.");
+      return;
     }
-  };
+    const hasTradeWithoutElement = tradeObjects.some(
+      (trade) => !trade.elements || trade.elements.length < 1
+    );
+    if (hasTradeWithoutElement) {
+      toast.error("Each trade must have at least one element.");
+      return;
+    }
+
+    await handleUpdateTemplate("trades");
+    setCurrentStep("preview");
+  }
+};
+
 
   const handleBack = () => {
     if (currentStep === "trades") {
