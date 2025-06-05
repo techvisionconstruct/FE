@@ -209,9 +209,7 @@ export default function EditProposal() {
         client_phone: formData.client_phone,
         client_address: formData.client_address,
         project_location: formData.project_location,
-        valid_until: formData.valid_until
-          ? new Date(formData.valid_until)
-          : undefined,
+        valid_until: formData.valid_until,
         status: formData.status,
       };
 

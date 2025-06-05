@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -68,6 +68,8 @@ export function ContractDetails({ proposal }: ClientContractViewProps) {
       reader.onerror = (error) => reject(error);
     });
   };
+  // Get the React Query client
+  const queryClient = useQueryClient();
 
   // React Query mutation for contract signing
   const signContractMutation = useMutation({
@@ -91,6 +93,21 @@ export function ContractDetails({ proposal }: ClientContractViewProps) {
       }
     },
     onSuccess: (data) => {
+      // Update the signature locally
+      setSignatures((prev) => ({
+        ...prev,
+        client: {
+          ...prev.client,
+          type: prev.client.type,
+          value: prev.client.value,
+        },
+      }));
+      
+      // Invalidate the proposal query to refetch the data
+      if (proposal?.id) {
+        queryClient.invalidateQueries({ queryKey: ["proposal", proposal.id.toString()] });
+      }
+      
       toast.success("Contract signed successfully!", {
         position: "top-center",
         duration: 3000,
@@ -104,7 +121,6 @@ export function ContractDetails({ proposal }: ClientContractViewProps) {
       });
     },
   });
-
   const handleSignContract = () => {
     if (!signatures.client.value) {
       toast.error("Please provide your signature before signing the contract", {
@@ -120,6 +136,17 @@ export function ContractDetails({ proposal }: ClientContractViewProps) {
       client_signature:
         signatures.client.type === "image" ? signatures.client.value : null,
     };
+
+    // Update local state to show contract is signed
+    // This will temporarily update the UI while the API call is in progress
+    if (proposal?.contract) {
+      const updatedContract = { 
+        ...proposal.contract,
+        client_initials: signatures.client.type === "text" ? signatures.client.value : null,
+        client_signature: signatures.client.type === "image" ? signatures.client.value : null,
+        client_signed_at: new Date().toISOString()
+      };
+    }
 
     signContractMutation.mutate(contractData);
   };
@@ -270,12 +297,12 @@ This Agreement shall commence on the date of signing and shall continue until th
       };
     }
   });
-
   // Check if contract is already signed by client
   const isContractSigned = !!(
     proposal?.contract?.client_signature ||
     (proposal?.contract?.client_initials &&
-      proposal?.contract?.client_initials.trim() !== "")
+      proposal?.contract?.client_initials.trim() !== "") ||
+    signContractMutation.isSuccess
   );
 
   // Handle input changes for signature

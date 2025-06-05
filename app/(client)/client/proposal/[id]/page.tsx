@@ -10,10 +10,10 @@ import { ProposalDetailedLoader } from "@/components/features/client/loader-deta
 
 export default function ProposalById() {
   const { id } = useParams();
-
   const proposal = useQuery({
     queryKey: ["proposal", id],
     queryFn: () => getProposalById(String(id)),
+    refetchOnWindowFocus: true,
   });
 
   if (proposal.isLoading) {

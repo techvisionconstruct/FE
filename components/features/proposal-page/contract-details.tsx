@@ -1267,6 +1267,7 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+
         },
         body: JSON.stringify({
           proposal_id: proposal.id,

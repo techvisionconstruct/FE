@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
 import { redirect, useRouter } from "next/navigation";
 import { Send } from "lucide-react";
+import Cookies from "js-cookie";
 
 // Import our step components
 import TemplateSelectionStep from "@/components/features/create-proposal-page/template-selection-tab";
@@ -408,12 +409,14 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     if (!proposalToSend?.id) return;
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL;
+    const token = Cookies.get("auth-token");
     setIsSending(true);
     try {
       const response = await fetch(`${API_URL}/v1/proposals/send/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           proposal_id: proposalToSend.id,
