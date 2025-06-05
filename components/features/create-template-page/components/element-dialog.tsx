@@ -882,6 +882,7 @@ export function ElementDialog({
               }}
               formulaType="material"
               onValidationError={setMaterialFormulaError} // NEW
+              excludeProducts={true}
             />
           </div>
 
@@ -918,6 +919,7 @@ export function ElementDialog({
               }}
               formulaType="labor"
               onValidationError={setLaborFormulaError}
+              excludeProducts={true}
             />
           </div>
         </div>

@@ -38,6 +38,8 @@ interface FormulaBuilderProps {
   onCreateVariable?: (name: string, formulaType?: "material" | "labor") => void;
   formulaType?: "material" | "labor";
   onValidationError?: (error: string | null) => void;
+  excludeVariableName?: string;
+  excludeProducts?: boolean;
 }
 
 // Function to validate a mathematical formula
@@ -154,6 +156,8 @@ export function FormulaBuilder({
   onCreateVariable,
   formulaType,
   onValidationError,
+  excludeVariableName,
+  excludeProducts = false,
 }: FormulaBuilderProps) {
   const [formulaInput, setFormulaInput] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -430,22 +434,20 @@ export function FormulaBuilder({
       setSuggestions([]);
       setShowSuggestions(false);
       return;
-    }
-
-    let templateMatches = templateVariables.filter(
+    }    let templateMatches = templateVariables.filter(
       (v) =>
         v.name.toLowerCase().includes(formulaInput.toLowerCase()) &&
         !validFormulaTokens.some(
           (token) =>
             token.type === "variable" &&
             token.text.toLowerCase() === v.name.toLowerCase()
-        )
+        ) &&
+        // Exclude the current variable being edited by name
+        (!excludeVariableName || v.name.toLowerCase() !== excludeVariableName.toLowerCase())
     );
 
     let apiMatches: VariableResponse[] = [];
-    let productMatches: any[] = [];
-
-    if (variablesData?.data) {
+    let productMatches: any[] = [];    if (variablesData?.data) {
       apiMatches = (variablesData.data as VariableResponse[]).filter(
         (v) =>
           v.name.toLowerCase().includes(formulaInput.toLowerCase()) &&
@@ -456,11 +458,11 @@ export function FormulaBuilder({
             (token) =>
               token.type === "variable" &&
               token.text.toLowerCase() === v.name.toLowerCase()
-          )
+          ) &&
+          // Exclude the current variable being edited by name
+          (!excludeVariableName || v.name.toLowerCase() !== excludeVariableName.toLowerCase())
       );
-    }
-
-    if (productsData?.data) {
+    }    if (productsData?.data && !excludeProducts) {
       productMatches = (productsData.data as any[]).filter(
         (p) =>
           p.search_term?.toLowerCase().includes(formulaInput.toLowerCase()) &&
@@ -519,13 +521,14 @@ export function FormulaBuilder({
     setSuggestions(suggestions);
 
     setShowSuggestions(true);
-    setSelectedSuggestion(0);
-  }, [
+    setSelectedSuggestion(0);  }, [
     formulaInput,
     templateVariables,
     variablesData?.data,
     productsData?.data,
     validFormulaTokens,
+    excludeVariableName,
+    excludeProducts,
   ]);
 
   const isFormulaValid = useMemo(() => {

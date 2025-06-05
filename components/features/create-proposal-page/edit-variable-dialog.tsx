@@ -213,6 +213,8 @@ const EditVariableDialog: React.FC<EditVariableDialogProps> = ({
                   variables={variables}
                   updateVariables={updateVariables}
                   hasError={!!formulaError}
+                  excludeVariableName={variableName}
+                  excludeProducts={true}
                   onCreateVariable={(name) => {
                     // Handle variable creation if needed
                   }}

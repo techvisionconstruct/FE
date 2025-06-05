@@ -38,6 +38,8 @@ interface FormulaBuilderProps {
   onCreateVariable?: (name: string, formulaType?: "material" | "labor") => void;
   formulaType?: "material" | "labor";
   onValidationError?: (error: string | null) => void;
+  excludeVariableName?: string;
+  excludeProducts?: boolean;
 }
 
 // Function to validate a mathematical formula
@@ -154,6 +156,8 @@ export function FormulaBuilder({
   onCreateVariable,
   formulaType,
   onValidationError,
+  excludeVariableName,
+  excludeProducts = false,
 }: FormulaBuilderProps) {
   const [formulaInput, setFormulaInput] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -400,12 +404,19 @@ export function FormulaBuilder({
       e.preventDefault();
       setSelectedSuggestion((prev) =>
         prev < suggestions.length - 1 ? prev + 1 : prev
-      );
-    } else if (e.key === "ArrowUp" && showSuggestions) {
+      );    } else if (e.key === "ArrowUp" && showSuggestions) {
       e.preventDefault();
       setSelectedSuggestion((prev) => (prev > 0 ? prev - 1 : 0));
     }
   };
+
+  // Create a stable reference for current formula tokens to avoid infinite loops
+  const currentTokenNames = useMemo(() => {
+    if (!Array.isArray(formulaTokens)) return [];
+    return formulaTokens
+      .filter(token => token && token.type === "variable")
+      .map(token => token.text.toLowerCase());
+  }, [formulaTokens]);
 
   useEffect(() => {
     if (!formulaInput.trim()) {
@@ -424,19 +435,19 @@ export function FormulaBuilder({
       return;
     }
 
+    // Filter template variables
     let templateMatches = templateVariables.filter(
       (v) =>
         v.name.toLowerCase().includes(formulaInput.toLowerCase()) &&
-        !validFormulaTokens.some(
-          (token) =>
-            token.type === "variable" &&
-            token.text.toLowerCase() === v.name.toLowerCase()
-        )
+        !currentTokenNames.includes(v.name.toLowerCase()) &&
+        // Exclude the current variable being edited by name
+        (!excludeVariableName || v.name.toLowerCase() !== excludeVariableName.toLowerCase())
     );
 
     let apiMatches: VariableResponse[] = [];
     let productMatches: any[] = [];
 
+    // Filter API variables
     if (variablesData?.data) {
       apiMatches = (variablesData.data as VariableResponse[]).filter(
         (v) =>
@@ -444,23 +455,18 @@ export function FormulaBuilder({
           !templateMatches.some(
             (tm) => tm.name.toLowerCase() === v.name.toLowerCase()
           ) &&
-          !validFormulaTokens.some(
-            (token) =>
-              token.type === "variable" &&
-              token.text.toLowerCase() === v.name.toLowerCase()
-          )
+          !currentTokenNames.includes(v.name.toLowerCase()) &&
+          // Exclude the current variable being edited by name
+          (!excludeVariableName || v.name.toLowerCase() !== excludeVariableName.toLowerCase())
       );
     }
 
-    if (productsData?.data) {
+    // Filter products (only if not excluded)
+    if (productsData?.data && !excludeProducts) {
       productMatches = (productsData.data as any[]).filter(
         (p) =>
-          p.search_term?.toLowerCase().includes(formulaInput.toLowerCase()) &&
-          !validFormulaTokens.some(
-            (token) =>
-              token.type === "product" &&
-              token.text.toLowerCase() === p.search_term?.toLowerCase()
-          )
+          p.title?.toLowerCase().includes(formulaInput.toLowerCase()) &&
+          !currentTokenNames.includes(p.title?.toLowerCase())
       );
 
       // Mark products so we can identify them in the UI
@@ -470,20 +476,13 @@ export function FormulaBuilder({
       }));
     }
 
-    // Only show "add as variable" suggestion if:
-    // 1. Input is not a number
-    // 2. Input is not an operator
-    // 3. Input doesn't exactly match an existing variable
-    // 4. Input has at least 2 characters
+    // Only show "add as variable" suggestion if input doesn't match existing variable
     const shouldShowCreateSuggestion =
       formulaInput.trim().length >= 2 &&
       isNaN(parseFloat(formulaInput)) &&
       !["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim()) &&
       !variables.some(v => v.name.toLowerCase() === formulaInput.trim().toLowerCase()) &&
-      !validFormulaTokens.some(token =>
-        token.type === "variable" &&
-        token.text.toLowerCase() === formulaInput.trim().toLowerCase()
-      );
+      !currentTokenNames.includes(formulaInput.trim().toLowerCase());
 
     const suggestions = [];
 
@@ -504,17 +503,8 @@ export function FormulaBuilder({
       ...apiMatches.filter((v) => !v.is_global),
       ...productMatches
     );
-    console.log("Suggestions generated:", {
-      formulaInput,
-      templateMatches: templateMatches.length,
-      apiMatches: apiMatches.length,
-      productMatches: productMatches.length,
-      suggestionsCount: suggestions.length,
-      timestamp: new Date().toISOString()
-    });
 
     setSuggestions(suggestions);
-
     setShowSuggestions(true);
     setSelectedSuggestion(0);
   }, [
@@ -522,7 +512,10 @@ export function FormulaBuilder({
     templateVariables,
     variablesData?.data,
     productsData?.data,
-    validFormulaTokens,
+    currentTokenNames,
+    excludeVariableName,
+    excludeProducts,
+    variables,
   ]);
 
   const isFormulaValid = useMemo(() => {
