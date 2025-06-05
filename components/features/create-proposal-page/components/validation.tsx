@@ -35,19 +35,25 @@ export const validateProposalField = (field: string, value: string): string => {
         const phoneRegex = /^[1-9]\d{9,14}$/;
         if (!phoneRegex.test(value)) {
           error = "Please enter a valid phone number.";
-        }
-      }
+        }      }
       break;
 
-    case "location":
+    case "project_location":
       if (!value.trim()) {
         error = "Project Location cannot be blank.";
       }
-      break;
-
-    case "valid_until":
+      break;    case "valid_until":
       if (!value) {
         error = "Please select a valid date.";
+      } else {
+        try {
+          const date = new Date(value);
+          if (isNaN(date.getTime())) {
+            error = "Please select a valid date.";
+          }
+        } catch (e) {
+          error = "Please select a valid date.";
+        }
       }
       break;
 
@@ -71,12 +77,11 @@ export const validateProposalField = (field: string, value: string): string => {
 };
 
 export const validateAllProposalFields = (formData: {
-  name: string;
-  client_name: string;
+  name: string;  client_name: string;
   client_email: string;
   client_phone: string;
   client_address: string;
-  location: string;
+  project_location: string;
   valid_until: string;
 }): Record<string, string> => {
   const errors: Record<string, string> = {};
@@ -87,7 +92,7 @@ export const validateAllProposalFields = (formData: {
     "client_email",
     "client_phone",
     "client_address",
-    "location",
+    "project_location",
     "valid_until",
   ];
 

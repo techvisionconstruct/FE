@@ -13,11 +13,10 @@ export interface ProposalResponse {
   image?: string;
   template?: TemplateResponse;
   contract?: ContractResponse;
-  client_name?: string;
-  client_email?: string;
-  client_phone?: string;
+  client_name?: string;  client_email?: string;  client_phone?: string;
   client_address?: string;
   valid_until?: Date;
+  project_location?: string;
   total_material_cost?: number;
   total_labor_cost?: number;
   total_cost?: number;
@@ -49,23 +48,22 @@ export interface ProposalCreateRequest {
   template: string | null;
   image?: string;
   owner?: string;
-  client_name?: string;
-  client_email?: string;
+  client_name?: string;  client_email?: string;
   client_phone?: string;
   client_address?: string;
   valid_until?: string;
+  project_location?: string;
   is_public?: boolean;
 }
 
 export interface ProposalUpdateRequest {
   name: string; // Changed from optional to required to match backend expectations
   description?: string;
-  status?: string;
-  client_name?: string;
-  client_email?: string;
+  status?: string;  client_name?: string;  client_email?: string;
   client_phone?: string;
   client_address?: string;
-  valid_until?: Date;
+  valid_until?: string;
+  project_location?: string;
   is_public?: boolean;
   total_material_cost?: number;
   total_labor_cost?: number; // Fixed typo from 'label' to 'labor'

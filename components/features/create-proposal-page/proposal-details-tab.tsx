@@ -32,11 +32,10 @@ interface ProposalDetailsTabProps {
     description: string;
     image: string;
     client_name: string;
-    client_email: string;
-    client_phone: string;
+    client_email: string;    client_phone: string;
     client_address: string;
     valid_until: string;
-    location: string;
+    project_location: string;
   };
   updateData: (data: any) => void;
   errors?: Record<string, string>;
@@ -49,10 +48,18 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
 }) => {
   const [imagePreview, setImagePreview] = useState<string | null>(
     data.image || null
-  );
-  const [date, setDate] = useState<Date | undefined>(
-    data.valid_until ? new Date(data.valid_until) : undefined
-  );
+  );  const [date, setDate] = useState<Date | undefined>(() => {
+    // If we have a valid date string, convert it to a Date object
+    if (data.valid_until) {
+      try {
+        return new Date(data.valid_until);
+      } catch (e) {
+        console.error("Error parsing date:", e);
+        return undefined;
+      }
+    }
+    return undefined;
+  });
   const autocompleteInput = useRef<HTMLInputElement>(null);
   const clientAddressInput = useRef<HTMLTextAreaElement>(null);
 
@@ -70,18 +77,22 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
       ...data,
       [field]: value,
     });
-  };
-
-  const handleDateSelect = (newDate: Date | undefined) => {
+  };  const handleDateSelect = (newDate: Date | undefined) => {
     setDate(newDate);
     if (newDate) {
-      handleChange("valid_until", newDate.toISOString());
+      // Format as ISO string but preserve local time by setting hours to noon
+      const localDate = new Date(newDate);
+      localDate.setHours(0, 0, 0, 0);
+      const dateString = localDate.toISOString();
+      console.log('Setting valid_until to:', dateString);
+      handleChange("valid_until", dateString);
+    } else {
+      handleChange("valid_until", "");
     }
   };
-
   // Helper function to format dates without relying directly on date-fns
   const formatDate = (date: Date | undefined): string => {
-    if (!date) return "Select a date";
+    if (!date || isNaN(date.getTime())) return "Select a date";
 
     // Format as "Month Day, Year" (e.g., "May 15, 2023")
     return date.toLocaleDateString("en-US", {
@@ -101,6 +112,19 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
 
     return `${year}-${month}-${day}`;
   };
+  // Update date state when data.valid_until changes (like when loading existing data)
+  useEffect(() => {
+    if (data.valid_until) {
+      try {
+        const newDate = new Date(data.valid_until);
+        if (!isNaN(newDate.getTime())) {
+          setDate(newDate);
+        }
+      } catch (e) {
+        console.error("Error updating date from prop:", e);
+      }
+    }
+  }, [data.valid_until]);
 
   useEffect(() => {
     // Load Google Maps script
@@ -127,15 +151,13 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
           types: ["address"],
           componentRestrictions: { country: "us" },
         }
-      );
-
-      autocomplete.addListener("place_changed", () => {
+      );      autocomplete.addListener("place_changed", () => {
         const place = autocomplete.getPlace();
         if (place.formatted_address) {
-          // Only update the location field
+          // Only update the project_location field
           updateData({
             ...data,
-            location: place.formatted_address,
+            project_location: place.formatted_address,
           });
         }
       });
@@ -221,31 +243,33 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="location">
+            <div className="grid gap-2">              <Label htmlFor="project_location">
                 Project Location<span className="text-red-500">*</span>
               </Label>
               <Input
                 ref={autocompleteInput}
-                id="location"
+                id="project_location"
                 placeholder="Start typing to search for an address"
-                value={data.location}
-                onChange={(e) => handleChange("location", e.target.value)}
+                value={data.project_location}
+                onChange={(e) => handleChange("project_location", e.target.value)}
               />
-              {errors.location && (
-                <p className="text-red-500 text-sm">{errors.location}</p>
+              {errors.project_location && (
+                <p className="text-red-500 text-sm">{errors.project_location}</p>
               )}
             </div>
 
             <div className="grid gap-2">
               <Label htmlFor="valid_until">
                 Valid Until <span className="text-red-500">*</span>
-              </Label>
-              <Popover>
+              </Label>              <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full justify-start text-left font-normal"
+                    className={`w-full justify-start text-left font-normal ${
+                      errors.valid_until
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        : ""
+                    }`}
                     id="valid_until"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
@@ -258,6 +282,7 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
                     selected={date}
                     onSelect={handleDateSelect}
                     initialFocus
+                    defaultMonth={date}
                   />
                 </PopoverContent>
               </Popover>

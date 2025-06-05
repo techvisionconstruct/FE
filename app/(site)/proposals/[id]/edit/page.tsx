@@ -32,7 +32,7 @@ export default function EditProposal() {
   const proposalId = Array.isArray(id) ? id[0] : (id as string);
   const [currentStep, setCurrentStep] = useState<number>(0); // Changed to number
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const [formData, setFormData] = useState<{
     name: string;
     description: string;
@@ -42,7 +42,7 @@ export default function EditProposal() {
     client_phone: string;
     client_address: string;
     valid_until: string;
-    location: string;
+    project_location: string;
     status: string;
     template: TemplateResponse | null;
   }>({
@@ -54,17 +54,21 @@ export default function EditProposal() {
     client_phone: "",
     client_address: "",
     valid_until: "",
-    location: "",
+    project_location: "",
     status: "draft",
     template: null,
   });
 
   // Track if image has been changed to know whether to send it
   const [imageChanged, setImageChanged] = useState(false);
-  const [originalImageUrl, setOriginalImageUrl] = useState<string | undefined>(undefined);
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | undefined>(
+    undefined
+  );
 
   const [tradeObjects, setTradeObjects] = useState<TradeResponse[]>([]);
-  const [variableObjects, setVariableObjects] = useState<VariableResponse[]>([]);
+  const [variableObjects, setVariableObjects] = useState<VariableResponse[]>(
+    []
+  );
 
   // Fetch proposal data
   const {
@@ -77,11 +81,11 @@ export default function EditProposal() {
   useEffect(() => {
     if (proposalData) {
       console.log("Loading proposal data for edit:", proposalData);
-      
+
       // Store original image URL and reset image changed flag
       setOriginalImageUrl(proposalData.image);
       setImageChanged(false); // Reset on data load
-      
+
       setFormData({
         name: proposalData.name || "",
         description: proposalData.description || "",
@@ -90,21 +94,28 @@ export default function EditProposal() {
         client_email: proposalData.client_email || "",
         client_phone: proposalData.client_phone || "",
         client_address: proposalData.client_address || "",
+        project_location: proposalData.project_location || "",
         valid_until: proposalData.valid_until
           ? typeof proposalData.valid_until === "string"
             ? proposalData.valid_until
             : proposalData.valid_until.toISOString()
-          : "",        location: proposalData.location || "",
+          : "",
         status: proposalData.status || "draft",
         template: proposalData.template || null,
       });
 
-      if (proposalData.template?.trades && Array.isArray(proposalData.template.trades)) {
+      if (
+        proposalData.template?.trades &&
+        Array.isArray(proposalData.template.trades)
+      ) {
         console.log("Setting trades:", proposalData.template.trades);
         setTradeObjects(proposalData.template.trades);
       }
 
-      if (proposalData.template?.variables && Array.isArray(proposalData.template.variables)) {
+      if (
+        proposalData.template?.variables &&
+        Array.isArray(proposalData.template.variables)
+      ) {
         console.log("Setting variables:", proposalData.template.variables);
         setVariableObjects(proposalData.template.variables);
       }
@@ -113,21 +124,28 @@ export default function EditProposal() {
   // This function adapts the data updates from ProposalDetailsTab
   const handleProposalDetailsUpdate = (data: any) => {
     console.log("Updating proposal details:", data);
-    
+
     // Check if image has been changed - only mark as changed if it's different from original
     if (data.image !== undefined) {
       const newImage = data.image;
       const hasChanged = newImage !== originalImageUrl;
       setImageChanged(hasChanged);
-      console.log("Image changed:", hasChanged, "Original:", originalImageUrl, "New:", newImage);
+      console.log(
+        "Image changed:",
+        hasChanged,
+        "Original:",
+        originalImageUrl,
+        "New:",
+        newImage
+      );
     }
-    
+
     setFormData((prev) => ({
       ...prev,
       ...data,
     }));
   };
-  
+
   const updateFormData = (field: string, data: any) => {
     console.log("Updating form data:", field, data);
     setFormData((prev) => ({
@@ -146,7 +164,7 @@ export default function EditProposal() {
 
   // Update proposal mutation
   const updateProposalMutation = useMutation({
-    mutationFn: (updateData: ProposalUpdateRequest) => 
+    mutationFn: (updateData: ProposalUpdateRequest) =>
       updateProposal(proposalId, updateData),
     onSuccess: (data) => {
       console.log("Proposal updated successfully:", data);
@@ -157,17 +175,21 @@ export default function EditProposal() {
     },
     onError: (error: any) => {
       console.error("Failed to update proposal:", error);
-      toast.error(`Failed to update proposal: ${error.message || "Unknown error"}`);
+      toast.error(
+        `Failed to update proposal: ${error.message || "Unknown error"}`
+      );
     },
   });
   const handleNext = () => {
-    if (currentStep === 0) { // details step
+    if (currentStep === 0) {
+      // details step
       setCurrentStep(1); // go to trades step
     }
   };
 
   const handleBack = () => {
-    if (currentStep === 1) { // trades step
+    if (currentStep === 1) {
+      // trades step
       setCurrentStep(0); // go back to details step
     }
   };
@@ -177,7 +199,7 @@ export default function EditProposal() {
 
     try {
       console.log("Saving proposal with data:", formData);
-      
+
       // Prepare update data
       const updateData: ProposalUpdateRequest = {
         name: formData.name,
@@ -186,7 +208,10 @@ export default function EditProposal() {
         client_email: formData.client_email,
         client_phone: formData.client_phone,
         client_address: formData.client_address,
-        valid_until: formData.valid_until ? new Date(formData.valid_until) : undefined,
+        project_location: formData.project_location,
+        valid_until: formData.valid_until
+          ? new Date(formData.valid_until)
+          : undefined,
         status: formData.status,
       };
 
@@ -202,10 +227,7 @@ export default function EditProposal() {
       setIsLoading(false);
     }
   };
-  const getSteps = () => [
-    "Proposal Details",
-    "Trades & Elements"
-  ];
+  const getSteps = () => ["Proposal Details", "Trades & Elements"];
 
   if (isProposalLoading) {
     return (
@@ -221,8 +243,8 @@ export default function EditProposal() {
       <div className="flex flex-col items-center justify-center h-64">
         <HelpCircle className="h-8 w-8 text-destructive mb-2" />
         <p className="text-destructive">Failed to load proposal</p>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           onClick={() => router.push("/proposals")}
           className="mt-4"
         >
@@ -231,6 +253,8 @@ export default function EditProposal() {
       </div>
     );
   }
+
+  console.log("formData in EditProposal:", formData);
 
   return (
     <div className="flex-1 space-y-6 p-6">
@@ -250,12 +274,14 @@ export default function EditProposal() {
           </div>
         </div>
       </div>
-
       {/* Step Indicator */}
-      <StepIndicator steps={getSteps()} currentStep={currentStep} />      {/* Main Content */}      <Card className="w-full">
+      <StepIndicator steps={getSteps()} currentStep={currentStep} />{" "}
+      {/* Main Content */}{" "}
+      <Card className="w-full">
         <Tabs value={currentStep.toString()} className="w-full">
           {/* Proposal Details Step */}
-          <TabsContent value="0" className="space-y-4 p-6"><ProposalDetailsTab
+          <TabsContent value="0" className="space-y-4 p-6">
+            <ProposalDetailsTab
               data={{
                 name: formData.name,
                 description: formData.description,
@@ -265,13 +291,14 @@ export default function EditProposal() {
                 client_phone: formData.client_phone,
                 client_address: formData.client_address,
                 valid_until: formData.valid_until,
-                location: formData.location
+                project_location: formData.project_location,
               }}
               updateData={handleProposalDetailsUpdate}
             />
             <div className="flex justify-end pt-6">
               <Button onClick={handleNext}>Next: Trades & Elements</Button>
-            </div>          </TabsContent>
+            </div>{" "}
+          </TabsContent>
 
           {/* Trades and Elements Step */}
           <TabsContent value="1" className="space-y-4 p-6">
@@ -286,11 +313,11 @@ export default function EditProposal() {
                 updateTrades={updateTrades}
                 updateVariables={updateVariables}
               />
-              
+
               {/* Navigation Buttons */}
               <div className="flex justify-between pt-6">
-                <Button 
-                  onClick={handleBack} 
+                <Button
+                  onClick={handleBack}
                   variant="outline"
                   disabled={isLoading}
                 >
