@@ -23,6 +23,8 @@ export async function createProposal(proposal: ProposalCreateRequest) {
       payload.client_address = proposal.client_address;
     if (proposal.valid_until) payload.valid_until = proposal.valid_until;
 
+
+
     const response = await fetch(`${API_URL}/v1/proposals/create/`, {
       method: "POST",
       headers: {
