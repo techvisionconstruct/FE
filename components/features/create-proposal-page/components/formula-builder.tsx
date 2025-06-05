@@ -432,17 +432,7 @@ export function FormulaBuilder({
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
-      if (showSuggestions && suggestions.length > 0 && selectedSuggestion >= 0) {
-        const selected = suggestions[selectedSuggestion];
-        // If the selected suggestion is a variable, add as variable
-        if (selected && selected.name) {
-          addFormulaToken(selected.name, selected.name, "variable");
-          setFormulaInput("");
-          setShowSuggestions(false);
-          return;
-        }
-      }
-      // If input is a number, add as number
+      // ALWAYS PRIORITIZE NUMBERS: If input is a number, add as number (regardless of suggestions)
       if (!isNaN(Number(formulaInput.trim()))) {
         addFormulaToken(formulaInput.trim(), formulaInput.trim(), "number");
         setFormulaInput("");
@@ -455,7 +445,7 @@ export function FormulaBuilder({
         return;
       }
 
-      // ENTER behavior: Create new items when no exact match exists
+      // ENTER behavior: Only handle exact matches or create new variables (NOT suggestions)
       if (formulaInput.trim()) {
         const hasExactMatch = suggestions.some((item) => {
           const isProduct = "isProduct" in item && item.isProduct;
@@ -482,7 +472,8 @@ export function FormulaBuilder({
           });
 
           if (exactMatch) {
-            const isProduct = "isProduct" in exactMatch && exactMatch.isProduct;            if (isProduct) {
+            const isProduct = "isProduct" in exactMatch && exactMatch.isProduct;
+            if (isProduct) {
               addFormulaToken(exactMatch.id, exactMatch.title, "product");
             } else {
               // Use validation helper for variables
@@ -497,7 +488,7 @@ export function FormulaBuilder({
     } else if (e.key === "Tab" && suggestions.length > 0) {
       e.preventDefault();
 
-      // TAB behavior: Import first suggestion/exact match
+      // TAB behavior: Select highlighted suggestion
       const selectedItem = suggestions[selectedSuggestion];
       const isProduct = "isProduct" in selectedItem && selectedItem.isProduct;
       const isCreateSuggestion =
@@ -513,7 +504,9 @@ export function FormulaBuilder({
         // Handle product selection
         addFormulaToken(selectedItem.id, selectedItem.title, "product");
         return;
-      }      // Handle variable selection - use validation helper
+      }
+
+      // Handle variable selection - use validation helper
       addVariableWithValidation(selectedItem, selectedItem.name, selectedItem.name);
     } else if (e.key === "ArrowDown" && showSuggestions) {
       e.preventDefault();
@@ -533,11 +526,8 @@ export function FormulaBuilder({
       return;
     }
 
-    const numValue = parseFloat(formulaInput);
-    if (
-      !isNaN(numValue) ||
-      ["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim())
-    ) {
+    // MODIFIED: Don't hide suggestions for numeric values, but still hide for operators
+    if (["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim())) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -588,13 +578,12 @@ export function FormulaBuilder({
     }
 
     // Only show "add as variable" suggestion if:
-    // 1. Input is not a number
-    // 2. Input is not an operator
-    // 3. Input doesn't exactly match an existing variable
-    // 4. Input has at least 2 characters
+    // 1. Input is not an operator
+    // 2. Input doesn't exactly match an existing variable
+    // 3. Input has at least 2 characters
+    // MODIFIED: Allow create suggestion even for numeric values
     const shouldShowCreateSuggestion =
       formulaInput.trim().length >= 2 &&
-      isNaN(parseFloat(formulaInput)) &&
       !["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim()) &&
       !variables.some(
         (v) => v.name.toLowerCase() === formulaInput.trim().toLowerCase()
@@ -1002,7 +991,7 @@ export function FormulaBuilder({
                       Use "{formulaInput.trim()}" as number
                     </span>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Press Enter to add this number
+                      Press Enter to add this number (prioritized)
                     </p>
                   </div>
                 </div>

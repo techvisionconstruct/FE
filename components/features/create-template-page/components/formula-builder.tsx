@@ -430,6 +430,7 @@ export function FormulaBuilder({
     if (e.key === "Enter") {
       e.preventDefault();
 
+      // ALWAYS PRIORITIZE NUMBERS: If input is a number, add as number (regardless of suggestions)
       const numValue = parseFloat(formulaInput);
       if (!isNaN(numValue)) {
         addFormulaToken(formulaInput.trim(), formulaInput.trim(), "number");
@@ -441,7 +442,7 @@ export function FormulaBuilder({
         return;
       }
 
-      // ENTER behavior: Create new items when no exact match exists
+      // ENTER behavior: Only handle exact matches or create new variables (NOT suggestions)
       if (formulaInput.trim()) {
         const hasExactMatch = suggestions.some((item) => {
           const isProduct = "isProduct" in item && item.isProduct;
@@ -467,7 +468,7 @@ export function FormulaBuilder({
           
           if (exactMatch) {
             const isProduct = "isProduct" in exactMatch && exactMatch.isProduct;
-              if (isProduct) {
+            if (isProduct) {
               addFormulaToken(exactMatch.id, exactMatch.title, "product");
             } else {
               // Use validation helper for variables
@@ -482,7 +483,7 @@ export function FormulaBuilder({
     } else if (e.key === "Tab" && suggestions.length > 0) {
       e.preventDefault();
       
-      // TAB behavior: Import first suggestion/exact match
+      // TAB behavior: Select highlighted suggestion
       const selectedItem = suggestions[selectedSuggestion];
       const isProduct = "isProduct" in selectedItem && selectedItem.isProduct;
       const isCreateSuggestion = "isCreateSuggestion" in selectedItem && selectedItem.isCreateSuggestion;
@@ -497,9 +498,12 @@ export function FormulaBuilder({
         // Handle product selection
         addFormulaToken(selectedItem.id, selectedItem.title, "product");
         return;
-      }      // Handle variable selection - use validation helper
+      }
+
+      // Handle variable selection - use validation helper
       addVariableWithValidation(selectedItem, selectedItem.name, selectedItem.name);
-    } else if (e.key === "ArrowDown" && showSuggestions) {
+    }
+    else if (e.key === "ArrowDown" && showSuggestions) {
       e.preventDefault();
       setSelectedSuggestion((prev) =>
         prev < suggestions.length - 1 ? prev + 1 : prev
@@ -524,11 +528,8 @@ export function FormulaBuilder({
       return;
     }
 
-    const numValue = parseFloat(formulaInput);
-    if (
-      !isNaN(numValue) ||
-      ["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim())
-    ) {
+    // MODIFIED: Don't hide suggestions for numeric values, but still hide for operators
+    if (["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim())) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -576,9 +577,9 @@ export function FormulaBuilder({
     }
 
     // Only show "add as variable" suggestion if input doesn't match existing variable
+    // MODIFIED: Allow create suggestion even for numeric values
     const shouldShowCreateSuggestion =
       formulaInput.trim().length >= 2 &&
-      isNaN(parseFloat(formulaInput)) &&
       !["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim()) &&
       !variables.some(v => v.name.toLowerCase() === formulaInput.trim().toLowerCase()) &&
       !currentTokenNames.includes(formulaInput.trim().toLowerCase());
@@ -933,7 +934,7 @@ export function FormulaBuilder({
                       Use "{formulaInput.trim()}" as number
                     </span>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Press Enter to add this number
+                      Press Enter to add this number (prioritized)
                     </p>
                   </div>
                 </div>
@@ -978,7 +979,7 @@ export function FormulaBuilder({
                 >
                   <div className="flex-1">
                     <span className="font-medium text-sm">
-                      Use "{formulaInput.trim()}"
+                      Use "{formulaInput.trim()}
                     </span>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Press Enter to use this existing variable
