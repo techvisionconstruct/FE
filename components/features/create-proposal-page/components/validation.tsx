@@ -73,12 +73,11 @@ export const validateProposalField = (field: string, value: string): string => {
 };
 
 export const validateAllProposalFields = (formData: {
-  name: string;
-  client_name: string;
+  name: string;  client_name: string;
   client_email: string;
   client_phone: string;
   client_address: string;
-  location: string;
+  project_location: string;
   valid_until: string;
 }): Record<string, string> => {
   const errors: Record<string, string> = {};
@@ -89,7 +88,7 @@ export const validateAllProposalFields = (formData: {
     "client_email",
     "client_phone",
     "client_address",
-    "location",
+    "project_location",
     "valid_until",
   ];
 

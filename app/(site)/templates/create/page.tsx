@@ -32,6 +32,7 @@ export default function CreateTemplate() {
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTourRunning, setIsTourRunning] = useState(false);
+  const [isFormValid, setIsFormValid] = useState(true);
   const [formData, setFormData] = useState<TemplateCreateRequest>({
     name: "",
     description: "",
@@ -185,8 +186,16 @@ useEffect(() => {
       setIsLoading(false);
     },
   });
-
   const handleCreateTemplate = async () => {
+    // Check if template name is valid
+    if (!isFormValid) {
+      toast.error("Invalid template details", {
+        position: "top-center",
+        description: "Template name must be less than 100 characters."
+      });
+      return Promise.reject("Invalid template details");
+    }
+    
     setIsLoading(true);
 
     const templateDetails = {
@@ -219,6 +228,15 @@ useEffect(() => {
     if (!templateId) {
       toast.error("Template ID is missing");
       return Promise.reject("Template ID is missing");
+    }
+
+    // Check if template name is valid when updating from details step
+    if (step === "details" && !isFormValid) {
+      toast.error("Invalid template details", {
+        position: "top-center",
+        description: "Template name must be less than 100 characters."
+      });
+      return Promise.reject("Invalid template details");
     }
 
     setIsLoading(true);
@@ -336,17 +354,17 @@ useEffect(() => {
                 image: formData.image,
               }}
               updateData={(data) => updateFormData("details", data)}
+              onValidationChange={setIsFormValid}
             />
             <div className="flex justify-end mt-6">
-              <Button
-                onClick={() => {
+              <Button                onClick={() => {
                   if (templateId) {
                     handleUpdateTemplate("details");
                   } else {
                     handleCreateTemplate();
                   }
                 }}
-                disabled={isLoading}
+                disabled={isLoading || !isFormValid}
               >
                 {isLoading ? (
                   <>

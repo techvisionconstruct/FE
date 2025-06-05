@@ -49,7 +49,7 @@ export default function EditProposal() {
     client_phone: string;
     client_address: string;
     valid_until: string;
-    location: string;
+    project_location: string;
     status: string;
     template: TemplateResponse | null;
   }>({
@@ -61,7 +61,7 @@ export default function EditProposal() {
     client_phone: "",
     client_address: "",
     valid_until: "",
-    location: "",
+    project_location: "",
     status: "draft",
     template: null,
   });
@@ -101,12 +101,12 @@ export default function EditProposal() {
         client_email: proposalData.client_email || "",
         client_phone: proposalData.client_phone || "",
         client_address: proposalData.client_address || "",
+        project_location: proposalData.project_location || "",
         valid_until: proposalData.valid_until
           ? typeof proposalData.valid_until === "string"
             ? proposalData.valid_until
             : proposalData.valid_until.toISOString()
           : "",
-        location: proposalData.location || "",
         status: proposalData.status || "draft",
         template: proposalData.template || null,
       });
@@ -233,9 +233,8 @@ export default function EditProposal() {
         client_email: formData.client_email,
         client_phone: formData.client_phone,
         client_address: formData.client_address,
-        valid_until: formData.valid_until
-          ? new Date(formData.valid_until)
-          : undefined,
+        project_location: formData.project_location,
+        valid_until: formData.valid_until,
         status: formData.status,
       };
 
@@ -279,6 +278,8 @@ export default function EditProposal() {
     );
   }
 
+  console.log("formData in EditProposal:", formData);
+
   return (
     <div className="flex-1 space-y-6 p-6">
       {/* Header */}
@@ -314,7 +315,7 @@ export default function EditProposal() {
                 client_phone: formData.client_phone,
                 client_address: formData.client_address,
                 valid_until: formData.valid_until,
-                location: formData.location,
+                project_location: formData.project_location,
               }}
               updateData={handleProposalDetailsUpdate}
               errors={validationErrors} // Pass validation errors

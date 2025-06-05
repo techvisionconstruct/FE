@@ -18,10 +18,10 @@ export async function createProposal(proposal: ProposalCreateRequest) {
     if (proposal.owner) payload.owner = proposal.owner;
     if (proposal.client_name) payload.client_name = proposal.client_name;
     if (proposal.client_email) payload.client_email = proposal.client_email;
-    if (proposal.client_phone) payload.client_phone = proposal.client_phone;
-    if (proposal.client_address)
+    if (proposal.client_phone) payload.client_phone = proposal.client_phone;    if (proposal.client_address)
       payload.client_address = proposal.client_address;
     if (proposal.valid_until) payload.valid_until = proposal.valid_until;
+    if (proposal.project_location) payload.project_location = proposal.project_location;
 
 
 

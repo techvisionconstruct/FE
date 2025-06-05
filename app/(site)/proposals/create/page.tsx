@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
 import { redirect, useRouter } from "next/navigation";
 import { Send } from "lucide-react";
+import Cookies from "js-cookie";
 
 // Import our step components
 import TemplateSelectionStep from "@/components/features/create-proposal-page/template-selection-tab";
@@ -55,12 +56,11 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     name: string;
     description: string;
     image: string;
-    client_name: string;
-    client_email: string;
+    client_name: string;    client_email: string;
     client_phone: string;
     client_address: string;
     valid_until: string;
-    location: string;
+    project_location: string;
     status: string;
     template: TemplateResponse | null;
   }>({
@@ -70,13 +70,11 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     client_name: proposal?.client_name || "",
     client_email: proposal?.client_email || "",
     client_phone: proposal?.client_phone || "",
-    client_address: proposal?.client_address || "",
-    valid_until: proposal?.valid_until
-      ? typeof proposal.valid_until === "string"
+    client_address: proposal?.client_address || "",    valid_until: proposal?.valid_until      ? typeof proposal.valid_until === "string"
         ? proposal.valid_until
         : proposal.valid_until.toISOString()
       : "",
-    location: "",
+    project_location: proposal?.project_location || "",
     status: proposal?.status || "draft",
     template: proposal?.template || null,
   });
@@ -206,11 +204,10 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
       status: formData.status,
       image: formData.image,
       client_name: formData.client_name,
-      client_email: formData.client_email,
-      client_phone: formData.client_phone,
+      client_email: formData.client_email,      client_phone: formData.client_phone,
       client_address: formData.client_address,
       valid_until: formData.valid_until,
-      location: formData.location,
+      project_location: formData.project_location,
       template: formData.template?.id || null,
     };
 
@@ -323,21 +320,23 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
       return;
     }
 
-    const templateId = formData.template ? formData.template.id : null;
-
-    const proposalDetails = {
+    const templateId = formData.template ? formData.template.id : null;    const proposalDetails = {
       name: formData.name,
       description: formData.description,
       status: formData.status,
       image: formData.image,
       client_name: formData.client_name,
-      client_email: formData.client_email,
-      client_phone: formData.client_phone,
+      client_email: formData.client_email,      client_phone: formData.client_phone,
       client_address: formData.client_address,
       valid_until: formData.valid_until,
-      location: formData.location,
+      project_location: formData.project_location,
       template: templateId || null,
     };
+
+    console.log('Proposal details being sent:', {
+      valid_until: formData.valid_until,
+      project_location: formData.project_location
+    });
 
     return new Promise((resolve, reject) => {
       createProposalMutation.mutate(proposalDetails, {
@@ -447,12 +446,14 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     if (!proposalToSend?.id) return;
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL;
+    const token = Cookies.get("auth-token");
     setIsSending(true);
     try {
       const response = await fetch(`${API_URL}/v1/proposals/send/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           proposal_id: proposalToSend.id,
@@ -622,11 +623,10 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                 description: formData.description,
                 image: formData.image,
                 client_name: formData.client_name,
-                client_email: formData.client_email,
-                client_phone: formData.client_phone,
+                client_email: formData.client_email,                client_phone: formData.client_phone,
                 client_address: formData.client_address,
                 valid_until: formData.valid_until,
-                location: formData.location,
+                project_location: formData.project_location,
               }}
               updateData={(data) => updateFormData(data)}
               errors={detailsErrors}
