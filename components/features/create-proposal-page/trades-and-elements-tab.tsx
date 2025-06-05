@@ -628,12 +628,29 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         updateVariables(updatedVariables);
       }
 
-      toast.success("Variable updated successfully");
-      setShowEditVariableDialog(false);
-      setCurrentVariableId(null);
+      // Only show toast and close dialog if not called from inline edit
+      // (inline edit handles its own toast messages)
+      if (showEditVariableDialog) {
+        toast.success("Variable updated successfully", {
+          position: "top-center",
+          description: `"${response?.data?.name || 'Variable'}" has been updated.`,
+        });
+        setShowEditVariableDialog(false);
+        setCurrentVariableId(null);
+      }
     },
     onError: (error) => {
-      toast.error(`Error updating variable: ${error.message}`);
+      // Only show error toast if not called from inline edit
+      // (inline edit handles its own error messages)
+      if (showEditVariableDialog) {
+        toast.error("Failed to update variable", {
+          position: "top-center",
+          description:
+            error instanceof Error
+              ? error.message
+              : "An unexpected error occurred",
+        });
+      }
     },
   });
 
@@ -1469,7 +1486,13 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       }
     } catch (error) {
       console.error("Error updating variable and elements:", error);
-      toast.error("Failed to update variable and elements");
+      toast.error("Failed to update variable and elements", {
+        position: "top-center",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred",
+      });
     } finally {
       setIsUpdatingVariable(false);
       setUpdatingElementCosts(new Set());
@@ -2340,7 +2363,10 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         // Still invalidate queries and force recalculation
         queryClient.invalidateQueries({ queryKey: ["elements"] });
         setCostUpdateTrigger((prev) => prev + 1);
-        toast.error("Failed to update all elements, but variable was updated");
+        toast.error("Failed to update all elements", {
+          position: "top-center", 
+          description: "Variable was updated but some elements could not be updated",
+        });
       }
 
       setShowEditVariableDialog(false);
