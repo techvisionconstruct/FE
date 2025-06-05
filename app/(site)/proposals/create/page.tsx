@@ -543,10 +543,6 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                   {" "}
                   <Button
                     onClick={() => {
-                      if (!validateVariables()) {
-                        setShowMissingVariablesDialog(true); // Show dialog if validation fails
-                        return;
-                      }
                       handleUpdateTemplate();
                       redirect("/proposals");
                     }}
