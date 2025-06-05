@@ -159,6 +159,20 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     } else if (currentStep === "template") {
       setCurrentStep("details");
     } else if (currentStep === "trades") {
+      // Validate trades and elements before proceeding
+      if (tradeObjects.length === 0) {
+        toast.error("At least one trade is required to proceed.");
+        return;
+      }
+      
+      // Check that each trade has at least one element
+      const tradesWithoutElements = tradeObjects.filter(trade => !trade.elements || trade.elements.length === 0);
+      if (tradesWithoutElements.length > 0) {
+        const tradeNames = tradesWithoutElements.map(trade => `"${trade.name}"`).join(", ");
+        toast.error(`Each trade must have at least one element. The following trades are missing elements: ${tradeNames}`);
+        return;
+      }
+      
       try {
         await handleUpdateTemplate();
         if (createdProposal?.id) {
