@@ -33,7 +33,7 @@ export default function EditTemplate() {
 
   const [currentStep, setCurrentStep] = useState<string>("details");
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const [formData, setFormData] = useState<TemplateCreateRequest>({
     name: "",
     description: "",
@@ -44,10 +44,14 @@ export default function EditTemplate() {
 
   // Track if image has been changed to know whether to send it
   const [imageChanged, setImageChanged] = useState(false);
-  const [originalImageUrl, setOriginalImageUrl] = useState<string | undefined>(undefined);
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | undefined>(
+    undefined
+  );
 
   const [tradeObjects, setTradeObjects] = useState<TradeResponse[]>([]);
-  const [variableObjects, setVariableObjects] = useState<VariableResponse[]>([]);
+  const [variableObjects, setVariableObjects] = useState<VariableResponse[]>(
+    []
+  );
 
   // Fetch template data
   const {
@@ -60,11 +64,11 @@ export default function EditTemplate() {
   useEffect(() => {
     if (templateData) {
       console.log("Loading template data for edit:", templateData);
-      
+
       // Store original image URL and reset image changed flag
       setOriginalImageUrl(templateData.image);
       setImageChanged(false); // Reset on data load
-      
+
       setFormData({
         name: templateData.name || "",
         description: templateData.description || "",
@@ -87,15 +91,23 @@ export default function EditTemplate() {
 
   const updateFormData = (field: string, data: any) => {
     console.log("Updating form data:", field, data);
-    
+
     // Check if image has been changed - only mark as changed if it's different from original
     if (data.image !== undefined) {
       const newImage = data.image;
-      const hasChanged = newImage !== originalImageUrl;
+      // Consider empty string as a change (image removal)
+      const hasChanged = newImage !== originalImageUrl || newImage === "";
       setImageChanged(hasChanged);
-      console.log("Image changed:", hasChanged, "Original:", originalImageUrl, "New:", newImage);
+      console.log(
+        "Image changed:",
+        hasChanged,
+        "Original:",
+        originalImageUrl,
+        "New:",
+        newImage
+      );
     }
-    
+
     setFormData((prev) => ({
       ...prev,
       ...data,
@@ -123,7 +135,7 @@ export default function EditTemplate() {
     mutationFn: (updateData: TemplateUpdateRequest) => {
       console.log("Calling updateTemplate API with:", {
         templateId,
-        updateData
+        updateData,
       });
       return updateTemplate(templateId, updateData);
     },
@@ -132,10 +144,10 @@ export default function EditTemplate() {
       toast.success("Template updated successfully!", {
         description: "Your changes have been saved",
       });
-      
+
       // Invalidate the template query to refresh data
       queryClient.invalidateQueries({ queryKey: ["template", templateId] });
-      
+
       handleNext();
     },
     onError: (error: any) => {
@@ -178,13 +190,17 @@ export default function EditTemplate() {
   // New function to update variable descriptions
   const updateVariableDescriptions = async (variables: VariableResponse[]) => {
     console.log("Updating variable descriptions...");
-    
+
     // Create an array of promises for each variable update
     const updatePromises = variables.map(async (variable) => {
       if (variable.id && variable.description !== undefined) {
         try {
-          console.log(`Updating variable ${variable.id} with description: ${variable.description}`);
-          await updateVariable(variable.id, { description: variable.description });
+          console.log(
+            `Updating variable ${variable.id} with description: ${variable.description}`
+          );
+          await updateVariable(variable.id, {
+            description: variable.description,
+          });
           return { id: variable.id, success: true };
         } catch (error) {
           console.error(`Error updating variable ${variable.id}:`, error);
@@ -193,7 +209,7 @@ export default function EditTemplate() {
       }
       return { id: variable.id, success: false, skipped: true };
     });
-    
+
     // Wait for all updates to complete
     return Promise.all(updatePromises);
   };
@@ -210,11 +226,13 @@ export default function EditTemplate() {
     console.log("Image changed:", imageChanged);
 
     setIsLoading(true);
-    
+
     // First update any variables that have descriptions
     if (variableObjects && variableObjects.length > 0) {
       try {
-        const variableUpdateResults = await updateVariableDescriptions(variableObjects);
+        const variableUpdateResults = await updateVariableDescriptions(
+          variableObjects
+        );
         console.log("Variable update results:", variableUpdateResults);
       } catch (error) {
         console.error("Error updating variable descriptions:", error);
@@ -233,11 +251,18 @@ export default function EditTemplate() {
     };
 
     // Only include image in update if it was actually changed AND it's base64 data
-    if (imageChanged && formData.image && formData.image.startsWith('data:')) {
-      updateData.image = formData.image;
-      console.log("Including changed image in update (base64)");
+    if (imageChanged) {
+      if (formData.image === "") {
+        // Image was explicitly removed
+        updateData.image = ""; // or "" depending on what your API expects for removal
+        console.log("Removing image");
+      } else if (formData.image && formData.image.startsWith("data:")) {
+        // New image was uploaded
+        updateData.image = formData.image;
+        console.log("Including changed image in update (base64)");
+      }
     } else {
-      console.log("Skipping image update - not changed or not base64");
+      console.log("Skipping image update - not changed");
     }
 
     console.log("Final update data being sent:", updateData);
@@ -260,14 +285,22 @@ export default function EditTemplate() {
     console.log("Image changed:", imageChanged);
 
     setIsLoading(true);
-    
+
     // First update any variables that have descriptions
     if (variableObjects && variableObjects.length > 0) {
       try {
-        const variableUpdateResults = await updateVariableDescriptions(variableObjects);
-        console.log("Variable update results (publish flow):", variableUpdateResults);
+        const variableUpdateResults = await updateVariableDescriptions(
+          variableObjects
+        );
+        console.log(
+          "Variable update results (publish flow):",
+          variableUpdateResults
+        );
       } catch (error) {
-        console.error("Error updating variable descriptions during publish:", error);
+        console.error(
+          "Error updating variable descriptions during publish:",
+          error
+        );
         toast.error("Some variable descriptions could not be updated");
       }
     }
@@ -283,7 +316,7 @@ export default function EditTemplate() {
     };
 
     // Only include image in update if it was actually changed AND it's base64 data
-    if (imageChanged && formData.image && formData.image.startsWith('data:')) {
+    if (imageChanged && formData.image && formData.image.startsWith("data:")) {
       updateData.image = formData.image;
       console.log("Including changed image in publish (base64)");
     } else {
@@ -312,8 +345,13 @@ export default function EditTemplate() {
     return (
       <div className="container">
         <div className="bg-red-50 border border-red-200 p-6 rounded-lg text-center">
-          <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Template</h2>
-          <p className="text-red-700 mb-4">Unable to load the template data. It may have been deleted or you don't have permission to view it.</p>
+          <h2 className="text-lg font-semibold text-red-800 mb-2">
+            Error Loading Template
+          </h2>
+          <p className="text-red-700 mb-4">
+            Unable to load the template data. It may have been deleted or you
+            don't have permission to view it.
+          </p>
           <Link href="/templates" className="text-blue-600 hover:underline">
             Return to Templates
           </Link>
@@ -325,8 +363,8 @@ export default function EditTemplate() {
   return (
     <div className="container">
       <div className="flex items-center gap-2 mb-4">
-        <Link 
-          href={`/templates/${templateId}`} 
+        <Link
+          href={`/templates/${templateId}`}
           className="flex items-center text-muted-foreground hover:text-primary transition-colors"
         >
           <ArrowLeft className="mr-1 h-4 w-4" />
@@ -335,9 +373,12 @@ export default function EditTemplate() {
       </div>
 
       <div className="mb-4">
-        <h1 className="text-2xl font-bold">{templateData?.name || "Edit Template"}</h1>
+        <h1 className="text-2xl font-bold">
+          {templateData?.name || "Edit Template"}
+        </h1>
         <p className="text-muted-foreground text-sm">
-          {templateData?.description || "Update your template design and configuration"}
+          {templateData?.description ||
+            "Update your template design and configuration"}
         </p>
       </div>
 
@@ -391,7 +432,7 @@ export default function EditTemplate() {
                 console.log("Trades being updated:", trades);
                 setTradeObjects(trades);
                 // Also update form data to ensure consistency
-                setFormData(prev => ({
+                setFormData((prev) => ({
                   ...prev,
                   trades: trades.map((trade) => trade.id),
                 }));
@@ -400,7 +441,7 @@ export default function EditTemplate() {
                 console.log("Variables being updated:", variables);
                 setVariableObjects(variables);
                 // Also update form data to ensure consistency
-                setFormData(prev => ({
+                setFormData((prev) => ({
                   ...prev,
                   variables: variables.map((variable) => variable.id),
                 }));
@@ -445,15 +486,15 @@ export default function EditTemplate() {
                 Back
               </Button>
               <div className="flex space-x-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => router.push(`/templates/${templateId}`)}
                   disabled={isLoading}
                 >
                   Cancel
                 </Button>
-                <Button 
-                  onClick={handlePublishTemplate} 
+                <Button
+                  onClick={handlePublishTemplate}
                   disabled={isLoading || !formData.name?.trim()}
                 >
                   {isLoading ? (
