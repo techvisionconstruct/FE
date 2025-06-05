@@ -279,56 +279,63 @@ export function FormulaBuilder({
         // Ensure displayText is always present, fallback to text if missing
         displayText: token.displayText !== undefined ? token.displayText : token.text
       }));
-  }, [formulaTokens]);  // Helper function to add variable to template and validate formula
-  const addVariableWithValidation = (
-    variableItem: VariableResponse,
-    text: string,
-    displayText: string
-  ) => {
-    const newToken: FormulaToken = {
-      id: Date.now() + Math.random(),
-      text,
-      displayText,
-      type: "variable",
-    };    // Create the proposed new tokens array
-    const proposedTokens = [...validFormulaTokens, newToken];
+}, [formulaTokens]);  // Helper function to add variable to template and validate formula
+const addVariableWithValidation = (
+  variableItem: VariableResponse,
+  text: string,
+  displayText: string
+) => {
+  const newToken: FormulaToken = {
+    id: Date.now() + Math.random(),
+    text,
+    displayText,
+    type: "variable",
+  };
 
-    // Check if adding this token would create invalid consecutive operands
-    const { isValid, errorMessage } = validateConsecutiveOperands(proposedTokens);
+  // Create the proposed new tokens array
+  const proposedTokens = [...validFormulaTokens, newToken];
 
-    if (!isValid) {
-      // Show error but don't add the invalid token or import the variable
-      toast.error("Formula Error", {
-        position: "top-center",
-        description: errorMessage,
-        icon: <AlertCircle className="w-4 h-4" />,
-      });
-      // Don't add the token or import the variable, just clear the input
-      setFormulaInput("");
-      setShowSuggestions(false);
-      return false; // Return false to indicate failure
-    }
+  // Check if adding this token would create invalid consecutive operands
+  const { isValid, errorMessage } = validateConsecutiveOperands(proposedTokens);
 
-    // Only import variable to template if formula would be valid
-    if (updateVariables && !variables.some((v) => v.id === variableItem.id)) {
-      updateVariables((currentVariables) => {
-        if (currentVariables.some((v) => v.id === variableItem.id)) {
-          return currentVariables;
-        }
-        return [...currentVariables, variableItem];
-      });
-
-      toast.success("Variable automatically added", {
-        description: `"${variableItem.name}" has been added to your template.`,
-      });
-    }
-
-    // Add the token to the formula
-    setFormulaTokens(proposedTokens);
+  if (!isValid) {
+    // Show error but don't add the invalid token or import the variable
+    toast.error("Formula Error", {
+      position: "top-center",
+      description: errorMessage,
+      icon: <AlertCircle className="w-4 h-4" />,
+    });
+    // Don't add the token or import the variable, just clear the input
     setFormulaInput("");
     setShowSuggestions(false);
-    return true; // Return true to indicate success
-  };
+    return false;
+  }
+
+  // Clear input and suggestions BEFORE any state updates
+  setFormulaInput("");
+  setShowSuggestions(false);
+
+  // If variable needs to be added to template, do it FIRST
+  if (updateVariables && !variables.some((v) => v.id === variableItem.id)) {
+    updateVariables((currentVariables) => {
+      if (currentVariables.some((v) => v.id === variableItem.id)) {
+        return currentVariables;
+      }
+      return [...currentVariables, variableItem];
+    });
+
+    toast.success("Variable automatically added", {
+      description: `"${variableItem.name}" has been added to your template.`,
+    });
+  }
+
+  // THEN add the token to the formula using a small delay to ensure variables update first
+  setTimeout(() => {
+    setFormulaTokens(proposedTokens);
+  }, 1);
+
+  return true;
+};
   const addFormulaToken = (
     text: string,
     displayText: string,
@@ -521,6 +528,15 @@ export function FormulaBuilder({
       .map(token => token.text.toLowerCase());
   }, [formulaTokens]);
 
+  // Create a stable reference for template variables to prevent filtering issues
+  const stableTemplateVariables = useMemo(() => {
+    if (!variables) return [];
+    return variables.filter(
+      (variable) =>
+        variable && (variable.is_global || variable.origin === "derived")
+    );
+  }, [variables]);
+
   useEffect(() => {
     if (!formulaInput.trim()) {
       setSuggestions([]);
@@ -535,8 +551,8 @@ export function FormulaBuilder({
       return;
     }
 
-    // Filter template variables
-    let templateMatches = templateVariables.filter(
+    // Filter template variables using stable reference
+    let templateMatches = stableTemplateVariables.filter(
       (v) =>
         v.name.toLowerCase().includes(formulaInput.toLowerCase()) &&
         !currentTokenNames.includes(v.name.toLowerCase()) &&
@@ -577,7 +593,6 @@ export function FormulaBuilder({
     }
 
     // Only show "add as variable" suggestion if input doesn't match existing variable
-    // MODIFIED: Allow create suggestion even for numeric values
     const shouldShowCreateSuggestion =
       formulaInput.trim().length >= 2 &&
       !["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim()) &&
@@ -603,21 +618,13 @@ export function FormulaBuilder({
       ...apiMatches.filter((v) => !v.is_global),
       ...productMatches
     );
-    console.log("Suggestions generated:", {
-      formulaInput,
-      templateMatches: templateMatches.length,
-      apiMatches: apiMatches.length,
-      productMatches: productMatches.length,
-      suggestionsCount: suggestions.length,
-      timestamp: new Date().toISOString()
-    });
 
     setSuggestions(suggestions);
     setShowSuggestions(true);
     setSelectedSuggestion(0);
   }, [
     formulaInput,
-    templateVariables,
+    stableTemplateVariables, // Use stable reference instead of templateVariables
     variablesData?.data,
     productsData?.data,
     currentTokenNames,
@@ -684,7 +691,7 @@ export function FormulaBuilder({
       if (onValidationError) onValidationError(`Formula ends with "${lastToken.text}" - please complete the formula`);
     }
   }, [validFormulaTokens, onValidationError]);
-
+console.log(variables)
   return (
     <div
       tabIndex={-1}

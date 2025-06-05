@@ -265,7 +265,7 @@ export function FormulaBuilder({
     );
   }, [variables]);
 
-  // Ensure formulaTokens is always an array of valid tokens - STABILIZED
+  // Ensure validFormulaTokens is stable and doesn't depend on variables
   const validFormulaTokens = useMemo(() => {
     if (!Array.isArray(formulaTokens)) return [];
 
@@ -284,14 +284,24 @@ export function FormulaBuilder({
         displayText:
           token.displayText !== undefined ? token.displayText : token.text,
       }));
+  }, [formulaTokens]); // Only depend on formulaTokens
+
+  // Create a stable reference for current formula tokens to avoid infinite loops
+  const currentTokenNames = useMemo(() => {
+    if (!Array.isArray(formulaTokens)) return [];
+    return formulaTokens
+      .filter(token => token && token.type === "variable")
+      .map(token => token.text.toLowerCase());
   }, [formulaTokens]);
 
-  // Create stable references for token names to prevent infinite loops
-  const currentTokenNames = useMemo(() => {
-    return validFormulaTokens
-      .filter(token => token.type === "variable")
-      .map(token => token.text.toLowerCase());
-  }, [validFormulaTokens]);
+  // Create a stable reference for template variables to prevent filtering issues
+  const stableTemplateVariables = useMemo(() => {
+    if (!variables) return [];
+    return variables.filter(
+      (variable) =>
+        variable && (variable.is_global || variable.origin === "derived")
+    );
+  }, [variables]);
 
   // Add the missing isFormulaValid definition
   const isFormulaValid = useMemo(() => {
@@ -351,8 +361,8 @@ export function FormulaBuilder({
     setShowSuggestions(false);
   };
 
-  // Helper function to add variable to template and validate formula (for proposal page)
-  const addVariableWithValidation = useCallback((
+  // Helper function to add variable to template and validate formula
+  const addVariableWithValidation = (
     variableItem: VariableResponse,
     text: string,
     displayText: string
@@ -373,21 +383,23 @@ export function FormulaBuilder({
     if (!isValid) {
       // Show error but don't add the invalid token or import the variable
       toast.error("Formula Error", {
-        position: "top-center",  
+        position: "top-center",
         description: errorMessage,
         icon: <AlertCircle className="w-4 h-4" />,
       });
       // Don't add the token or import the variable, just clear the input
       setFormulaInput("");
       setShowSuggestions(false);
-      return false; // Return false to indicate failure
+      return false;
     }
 
-    // Only import variable to template if formula would be valid AND variable doesn't already exist
+    // Clear input and suggestions BEFORE any state updates
+    setFormulaInput("");
+    setShowSuggestions(false);
+
+    // If variable needs to be added to template, do it FIRST
     if (updateVariables && !variables.some((v) => v.id === variableItem.id)) {
-      // Use callback form to prevent infinite loops
       updateVariables((currentVariables) => {
-        // Double-check the variable doesn't already exist
         if (currentVariables.some((v) => v.id === variableItem.id)) {
           return currentVariables;
         }
@@ -399,12 +411,13 @@ export function FormulaBuilder({
       });
     }
 
-    // Add the token to the formula
-    setFormulaTokens(proposedTokens);
-    setFormulaInput("");
-    setShowSuggestions(false);
-    return true; // Return true to indicate success
-  }, [validFormulaTokens, updateVariables, variables]);
+    // THEN add the token to the formula using a small delay to ensure variables update first
+    setTimeout(() => {
+      setFormulaTokens(proposedTokens);
+    }, 1);
+
+    return true;
+  };
 
   const removeFormulaToken = (tokenId: number) => {
     const newTokens = validFormulaTokens.filter(
@@ -555,8 +568,8 @@ export function FormulaBuilder({
       return;
     }
 
-    // Filter template variables - use currentTokenNames instead of validFormulaTokens
-    let templateMatches = templateVariables.filter(
+    // Filter template variables using stable reference
+    let templateMatches = stableTemplateVariables.filter(
       (v) =>
         v.name.toLowerCase().includes(formulaInput.toLowerCase()) &&
         !currentTokenNames.includes(v.name.toLowerCase()) &&
@@ -565,79 +578,73 @@ export function FormulaBuilder({
     );
 
     let apiMatches: VariableResponse[] = [];
-    let productMatches: any[] = [];
+      let productMatches: any[] = [];
 
-    // Filter API variables
-    if (variablesData?.data) {
-      apiMatches = (variablesData.data as VariableResponse[]).filter(
-        (v) =>
-          v.name.toLowerCase().includes(formulaInput.toLowerCase()) &&
-          !templateMatches.some(
-            (tm) => tm.name.toLowerCase() === v.name.toLowerCase()
-          ) &&
-          !currentTokenNames.includes(v.name.toLowerCase()) &&
-          // Exclude the current variable being edited by name
-          (!excludeVariableName || v.name.toLowerCase() !== excludeVariableName.toLowerCase())
+      // Filter API variables
+      if (variablesData?.data) {
+        apiMatches = (variablesData.data as VariableResponse[]).filter(
+          (v) =>
+            v.name.toLowerCase().includes(formulaInput.toLowerCase()) &&
+            !templateMatches.some(
+              (tm) => tm.name.toLowerCase() === v.name.toLowerCase()
+            ) &&
+            !currentTokenNames.includes(v.name.toLowerCase()) &&
+            // Exclude the current variable being edited by name
+            (!excludeVariableName || v.name.toLowerCase() !== excludeVariableName.toLowerCase())
+        );
+      }
+
+      // Filter products (only if not excluded)
+      if (productsData?.data && !excludeProducts) {
+        productMatches = (productsData.data as any[]).filter(
+          (p) =>
+            p.title?.toLowerCase().includes(formulaInput.toLowerCase()) &&
+            !currentTokenNames.includes(p.title?.toLowerCase())
+        );
+
+        // Mark products so we can identify them in the UI
+        productMatches = productMatches.map((p) => ({
+          ...p,
+          isProduct: true,
+        }));
+      }
+
+      // Only show "add as variable" suggestion if input doesn't match existing variable
+      const shouldShowCreateSuggestion =
+        formulaInput.trim().length >= 2 &&
+        !["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim()) &&
+        !variables.some(v => v.name.toLowerCase() === formulaInput.trim().toLowerCase()) &&
+        !currentTokenNames.includes(formulaInput.trim().toLowerCase());
+
+      const suggestions = [];
+
+      // Add "create variable" suggestion first if applicable
+      if (shouldShowCreateSuggestion) {
+        suggestions.push({
+          id: `create-${formulaInput}`,
+          name: formulaInput.trim(),
+          displayText: `Add "${formulaInput.trim()}" as variable`,
+          isCreateSuggestion: true,
+        });
+      }
+
+      // Add other suggestions
+      suggestions.push(
+        ...templateMatches,
+        ...apiMatches.filter((v) => v.is_global),
+        ...apiMatches.filter((v) => !v.is_global),
+        ...productMatches
       );
-    }
 
-    // Filter products
-    if (productsData?.data && !excludeProducts) {
-      productMatches = (productsData.data as any[]).filter(
-        (p) =>
-          p.search_term?.toLowerCase().includes(formulaInput.toLowerCase()) &&
-          !currentTokenNames.includes(p.search_term?.toLowerCase())
-      );
-
-      // Mark products so we can identify them in the UI
-      productMatches = productMatches.map((p) => ({
-        ...p,
-        isProduct: true,
-      }));
-    }
-
-    // Only show "add as variable" suggestion if:
-    // 1. Input is not an operator
-    // 2. Input doesn't exactly match an existing variable
-    // 3. Input has at least 2 characters
-    // MODIFIED: Allow create suggestion even for numeric values
-    const shouldShowCreateSuggestion =
-      formulaInput.trim().length >= 2 &&
-      !["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim()) &&
-      !variables.some(
-        (v) => v.name.toLowerCase() === formulaInput.trim().toLowerCase()
-      ) &&
-      !currentTokenNames.includes(formulaInput.trim().toLowerCase());
-
-    const suggestions = [];
-
-    // Add "create variable" suggestion first if applicable
-    if (shouldShowCreateSuggestion) {
-      suggestions.push({
-        id: `create-${formulaInput}`,
-        name: formulaInput.trim(),
-        displayText: `Add "${formulaInput.trim()}" as variable`,
-        isCreateSuggestion: true,
-      });
-    }
-
-    // Add other suggestions
-    suggestions.push(
-      ...templateMatches,
-      ...apiMatches.filter((v) => v.is_global),
-      ...apiMatches.filter((v) => !v.is_global),
-      ...productMatches
-    );
-
-    setSuggestions(suggestions);
-    setShowSuggestions(true);
-    setSelectedSuggestion(0);
+      setSuggestions(suggestions);
+      setShowSuggestions(true);
+      setSelectedSuggestion(0);
   }, [
     formulaInput,
-    templateVariables,
+    stableTemplateVariables,
     variablesData?.data,
     productsData?.data,
-    currentTokenNames, // Use stable currentTokenNames instead of validFormulaTokens
+    currentTokenNames,
     excludeVariableName,
     excludeProducts,
     variables,
