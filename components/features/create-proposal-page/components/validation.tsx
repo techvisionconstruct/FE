@@ -32,22 +32,24 @@ export const validateProposalField = (field: string, value: string): string => {
       if (!value.trim()) {
         error = "Client Phone cannot be blank.";
       } else {
-        const phoneRegex = /^[1-9]\d{9,14}$/;
-        if (!phoneRegex.test(value)) {
+        // First strip all non-digit characters for validation
+        const digitsOnly = value.replace(/\D/g, "");
+
+        // Check if we have a valid number of digits (typically 10-15 for international)
+        if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+          error = "Phone number should have between 10 and 15 digits.";
+        } else if (
+          value === "1234567890" ||
+          value === "0000000000" ||
+          value === "0123456789"
+        ) {
+          // Reject obvious fake phone numbers
           error = "Please enter a valid phone number.";
+        } else if (!/^[(]?\d{3}[)]?[-\s.]?\d{3}[-\s.]?\d{4,}$/.test(value)) {
+          // Check for a reasonable format pattern: (xxx) xxx-xxxx or xxx-xxx-xxxx or similar
+          error =
+            "Please use a standard phone format like (123) 456-7890 or 123-456-7890.";
         }
-      }
-      break;
-
-    case "location":
-      if (!value.trim()) {
-        error = "Project Location cannot be blank.";
-      }
-      break;
-
-    case "valid_until":
-      if (!value) {
-        error = "Please select a valid date.";
       }
       break;
 

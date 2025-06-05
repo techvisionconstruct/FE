@@ -223,7 +223,8 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
 
             <div className="grid gap-2">
               <Label htmlFor="location">
-                Project Location<span className="text-red-500">*</span>
+                Project Location
+                <span className="text-gray-400">&#40;Optional&#41;</span>
               </Label>
               <Input
                 ref={autocompleteInput}
@@ -232,14 +233,12 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
                 value={data.location}
                 onChange={(e) => handleChange("location", e.target.value)}
               />
-              {errors.location && (
-                <p className="text-red-500 text-sm">{errors.location}</p>
-              )}
             </div>
 
             <div className="grid gap-2">
               <Label htmlFor="valid_until">
-                Valid Until <span className="text-red-500">*</span>
+                Valid Until{" "}
+                <span className="text-gray-400">&#40;Optional&#41;</span>
               </Label>
               <Popover>
                 <PopoverTrigger asChild>
@@ -261,9 +260,6 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
                   />
                 </PopoverContent>
               </Popover>
-              {errors.valid_until && (
-                <p className="text-red-500 text-sm">{errors.valid_until}</p>
-              )}
             </div>
           </div>
         </div>

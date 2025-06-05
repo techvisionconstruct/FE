@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Badge, Input, Button } from "@/components/shared";
 import {
   Variable,
@@ -247,6 +247,7 @@ export function FormulaBuilder({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Fix the useQuery calls - remove invalid parameters
   const { data: variablesData, isLoading: variablesLoading } = useQuery(
     getVariables(1, 10, formulaInput)
   );
@@ -255,6 +256,7 @@ export function FormulaBuilder({
     getProducts(1, 10, formulaInput)
   );
 
+  // Stabilize template variables with useMemo to prevent infinite loops
   const templateVariables = useMemo(() => {
     if (!variables) return [];
     return variables.filter(
@@ -262,7 +264,8 @@ export function FormulaBuilder({
         variable && (variable.is_global || variable.origin === "derived")
     );
   }, [variables]);
-  // Ensure formulaTokens is always an array of valid tokens
+
+  // Ensure formulaTokens is always an array of valid tokens - STABILIZED
   const validFormulaTokens = useMemo(() => {
     if (!Array.isArray(formulaTokens)) return [];
 
@@ -281,7 +284,21 @@ export function FormulaBuilder({
         displayText:
           token.displayText !== undefined ? token.displayText : token.text,
       }));
-  }, [formulaTokens]);  const addFormulaToken = (
+  }, [formulaTokens]);
+
+  // Create stable references for token names to prevent infinite loops
+  const currentTokenNames = useMemo(() => {
+    return validFormulaTokens
+      .filter(token => token.type === "variable")
+      .map(token => token.text.toLowerCase());
+  }, [validFormulaTokens]);
+
+  // Add the missing isFormulaValid definition
+  const isFormulaValid = useMemo(() => {
+    return validFormulaTokens.length > 0 && !validationError;
+  }, [validFormulaTokens, validationError]);
+
+  const addFormulaToken = (
     text: string,
     displayText: string,
     tokenType: "variable" | "operator" | "number" | "function" | "product"
@@ -335,7 +352,7 @@ export function FormulaBuilder({
   };
 
   // Helper function to add variable to template and validate formula (for proposal page)
-  const addVariableWithValidation = (
+  const addVariableWithValidation = useCallback((
     variableItem: VariableResponse,
     text: string,
     displayText: string
@@ -345,7 +362,9 @@ export function FormulaBuilder({
       text,
       displayText,
       type: "variable",
-    };    // Create the proposed new tokens array
+    };
+
+    // Create the proposed new tokens array
     const proposedTokens = [...validFormulaTokens, newToken];
 
     // Check if adding this token would create invalid consecutive operands
@@ -364,9 +383,11 @@ export function FormulaBuilder({
       return false; // Return false to indicate failure
     }
 
-    // Only import variable to template if formula would be valid
+    // Only import variable to template if formula would be valid AND variable doesn't already exist
     if (updateVariables && !variables.some((v) => v.id === variableItem.id)) {
+      // Use callback form to prevent infinite loops
       updateVariables((currentVariables) => {
+        // Double-check the variable doesn't already exist
         if (currentVariables.some((v) => v.id === variableItem.id)) {
           return currentVariables;
         }
@@ -374,7 +395,7 @@ export function FormulaBuilder({
       });
 
       toast.success("Variable automatically added", {
-        description: `"${variableItem.name}" has been added to your template.`,
+        description: `"${variableItem.name}" has been added to your proposal.`,
       });
     }
 
@@ -383,7 +404,7 @@ export function FormulaBuilder({
     setFormulaInput("");
     setShowSuggestions(false);
     return true; // Return true to indicate success
-  };
+  }, [validFormulaTokens, updateVariables, variables]);
 
   const removeFormulaToken = (tokenId: number) => {
     const newTokens = validFormulaTokens.filter(
@@ -432,17 +453,7 @@ export function FormulaBuilder({
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
-      if (showSuggestions && suggestions.length > 0 && selectedSuggestion >= 0) {
-        const selected = suggestions[selectedSuggestion];
-        // If the selected suggestion is a variable, add as variable
-        if (selected && selected.name) {
-          addFormulaToken(selected.name, selected.name, "variable");
-          setFormulaInput("");
-          setShowSuggestions(false);
-          return;
-        }
-      }
-      // If input is a number, add as number
+      // ALWAYS PRIORITIZE NUMBERS: If input is a number, add as number (regardless of suggestions)
       if (!isNaN(Number(formulaInput.trim()))) {
         addFormulaToken(formulaInput.trim(), formulaInput.trim(), "number");
         setFormulaInput("");
@@ -455,7 +466,7 @@ export function FormulaBuilder({
         return;
       }
 
-      // ENTER behavior: Create new items when no exact match exists
+      // ENTER behavior: Only handle exact matches or create new variables (NOT suggestions)
       if (formulaInput.trim()) {
         const hasExactMatch = suggestions.some((item) => {
           const isProduct = "isProduct" in item && item.isProduct;
@@ -482,7 +493,8 @@ export function FormulaBuilder({
           });
 
           if (exactMatch) {
-            const isProduct = "isProduct" in exactMatch && exactMatch.isProduct;            if (isProduct) {
+            const isProduct = "isProduct" in exactMatch && exactMatch.isProduct;
+            if (isProduct) {
               addFormulaToken(exactMatch.id, exactMatch.title, "product");
             } else {
               // Use validation helper for variables
@@ -497,7 +509,7 @@ export function FormulaBuilder({
     } else if (e.key === "Tab" && suggestions.length > 0) {
       e.preventDefault();
 
-      // TAB behavior: Import first suggestion/exact match
+      // TAB behavior: Select highlighted suggestion
       const selectedItem = suggestions[selectedSuggestion];
       const isProduct = "isProduct" in selectedItem && selectedItem.isProduct;
       const isCreateSuggestion =
@@ -513,7 +525,9 @@ export function FormulaBuilder({
         // Handle product selection
         addFormulaToken(selectedItem.id, selectedItem.title, "product");
         return;
-      }      // Handle variable selection - use validation helper
+      }
+
+      // Handle variable selection - use validation helper
       addVariableWithValidation(selectedItem, selectedItem.name, selectedItem.name);
     } else if (e.key === "ArrowDown" && showSuggestions) {
       e.preventDefault();
@@ -526,6 +540,7 @@ export function FormulaBuilder({
     }
   };
 
+  // STABILIZED suggestions effect with proper dependencies
   useEffect(() => {
     if (!formulaInput.trim()) {
       setSuggestions([]);
@@ -533,51 +548,45 @@ export function FormulaBuilder({
       return;
     }
 
-    const numValue = parseFloat(formulaInput);
-    if (
-      !isNaN(numValue) ||
-      ["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim())
-    ) {
+    // MODIFIED: Don't hide suggestions for numeric values, but still hide for operators
+    if (["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim())) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
-    }    let templateMatches = templateVariables.filter(
+    }
+
+    // Filter template variables - use currentTokenNames instead of validFormulaTokens
+    let templateMatches = templateVariables.filter(
       (v) =>
         v.name.toLowerCase().includes(formulaInput.toLowerCase()) &&
-        !validFormulaTokens.some(
-          (token) =>
-            token.type === "variable" &&
-            token.text.toLowerCase() === v.name.toLowerCase()
-        ) &&
+        !currentTokenNames.includes(v.name.toLowerCase()) &&
         // Exclude the current variable being edited by name
         (!excludeVariableName || v.name.toLowerCase() !== excludeVariableName.toLowerCase())
     );
 
     let apiMatches: VariableResponse[] = [];
-    let productMatches: any[] = [];    if (variablesData?.data) {
+    let productMatches: any[] = [];
+
+    // Filter API variables
+    if (variablesData?.data) {
       apiMatches = (variablesData.data as VariableResponse[]).filter(
         (v) =>
           v.name.toLowerCase().includes(formulaInput.toLowerCase()) &&
           !templateMatches.some(
             (tm) => tm.name.toLowerCase() === v.name.toLowerCase()
           ) &&
-          !validFormulaTokens.some(
-            (token) =>
-              token.type === "variable" &&
-              token.text.toLowerCase() === v.name.toLowerCase()
-          ) &&
+          !currentTokenNames.includes(v.name.toLowerCase()) &&
           // Exclude the current variable being edited by name
           (!excludeVariableName || v.name.toLowerCase() !== excludeVariableName.toLowerCase())
       );
-    }    if (productsData?.data && !excludeProducts) {
+    }
+
+    // Filter products
+    if (productsData?.data && !excludeProducts) {
       productMatches = (productsData.data as any[]).filter(
         (p) =>
           p.search_term?.toLowerCase().includes(formulaInput.toLowerCase()) &&
-          !validFormulaTokens.some(
-            (token) =>
-              token.type === "product" &&
-              token.text.toLowerCase() === p.search_term?.toLowerCase()
-          )
+          !currentTokenNames.includes(p.search_term?.toLowerCase())
       );
 
       // Mark products so we can identify them in the UI
@@ -588,22 +597,17 @@ export function FormulaBuilder({
     }
 
     // Only show "add as variable" suggestion if:
-    // 1. Input is not a number
-    // 2. Input is not an operator
-    // 3. Input doesn't exactly match an existing variable
-    // 4. Input has at least 2 characters
+    // 1. Input is not an operator
+    // 2. Input doesn't exactly match an existing variable
+    // 3. Input has at least 2 characters
+    // MODIFIED: Allow create suggestion even for numeric values
     const shouldShowCreateSuggestion =
       formulaInput.trim().length >= 2 &&
-      isNaN(parseFloat(formulaInput)) &&
       !["+", "-", "*", "/", "(", ")", "^"].includes(formulaInput.trim()) &&
       !variables.some(
         (v) => v.name.toLowerCase() === formulaInput.trim().toLowerCase()
       ) &&
-      !validFormulaTokens.some(
-        (token) =>
-          token.type === "variable" &&
-          token.text.toLowerCase() === formulaInput.trim().toLowerCase()
-      );
+      !currentTokenNames.includes(formulaInput.trim().toLowerCase());
 
     const suggestions = [];
 
@@ -626,28 +630,38 @@ export function FormulaBuilder({
     );
 
     setSuggestions(suggestions);
-
     setShowSuggestions(true);
-    setSelectedSuggestion(0);  }, [
+    setSelectedSuggestion(0);
+  }, [
     formulaInput,
     templateVariables,
     variablesData?.data,
     productsData?.data,
-    validFormulaTokens,
+    currentTokenNames, // Use stable currentTokenNames instead of validFormulaTokens
     excludeVariableName,
     excludeProducts,
+    variables,
   ]);
 
-  const isFormulaValid = useMemo(() => {
-    return validFormulaTokens.length > 0 && !validationError;
-  }, [validFormulaTokens, validationError]);
-
-  // Reset isCreatingVariable when the component re-renders
+  // STABILIZED validation effect
   useEffect(() => {
-    setIsCreatingVariable(false);
-  }, [validFormulaTokens]);
+    const { isValid, errorMessage } = validateCompleteFormula(validFormulaTokens);
+    if (!isValid && validFormulaTokens.length > 0) {
+      setValidationError(errorMessage);
+      if (onValidationError) onValidationError(errorMessage);
+    } else {
+      setValidationError(null);
+      if (onValidationError) onValidationError(null);
+    }
+    // Check for operation at end
+    const lastToken = validFormulaTokens[validFormulaTokens.length - 1];
+    if (lastToken && lastToken.type === "operator" && ["+", "-", "*", "/", "(", "^"].includes(lastToken.text)) {
+      setValidationError(`Formula ends with "${lastToken.text}" - please complete the formula`);
+      if (onValidationError) onValidationError(`Formula ends with "${lastToken.text}" - please complete the formula`);
+    }
+  }, [validFormulaTokens, onValidationError]);
 
-  // Handle pending variable addition after creation
+  // Handle pending variable addition after creation - STABILIZED
   useEffect(() => {
     if (!pendingVariableRef.current) return;
 
@@ -658,11 +672,7 @@ export function FormulaBuilder({
       (variable) =>
         variable.name.toLowerCase() === pendingVariable.name.toLowerCase() &&
         // Only add if it's not already in the formula
-        !validFormulaTokens.some(
-          (token) =>
-            token.type === "variable" &&
-            token.text.toLowerCase() === variable.name.toLowerCase()
-        )
+        !currentTokenNames.includes(variable.name.toLowerCase()) // Use stable currentTokenNames
     );
 
     if (newVariable) {
@@ -679,7 +689,7 @@ export function FormulaBuilder({
       pendingVariableRef.current = null;
       setIsCreatingVariable(false);
     }
-  }, [variables, validFormulaTokens]);
+  }, [variables, currentTokenNames]); // Use stable currentTokenNames
 
   // Validate formula on every token change
   useEffect(() => {
@@ -1002,7 +1012,7 @@ export function FormulaBuilder({
                       Use "{formulaInput.trim()}" as number
                     </span>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Press Enter to add this number
+                      Press Enter to add this number (prioritized)
                     </p>
                   </div>
                 </div>
