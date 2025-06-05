@@ -148,17 +148,27 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
       const errors = validateAllProposalFields(formData);
       setDetailsErrors(errors);
       if (Object.keys(errors).length > 0) {
-        toast.error("Please fill in all required fields correctly", {
-          position: "top-center",
-          description:
-            "Check the highlighted fields and correct any errors before proceeding",
-        });
+        toast.error("Please fill in all required fields correctly.");
         return;
       }
       setCurrentStep("trades");
     } else if (currentStep === "template") {
       setCurrentStep("details");
     } else if (currentStep === "trades") {
+      // Validate trades and elements before proceeding
+      if (tradeObjects.length === 0) {
+        toast.error("At least one trade is required to proceed.");
+        return;
+      }
+      
+      // Check that each trade has at least one element
+      const tradesWithoutElements = tradeObjects.filter(trade => !trade.elements || trade.elements.length === 0);
+      if (tradesWithoutElements.length > 0) {
+        const tradeNames = tradesWithoutElements.map(trade => `"${trade.name}"`).join(", ");
+        toast.error(`Each trade must have at least one element. The following trades are missing elements: ${tradeNames}`);
+        return;
+      }
+      
       try {
         await handleUpdateTemplate();
         if (createdProposal?.id) {
@@ -168,21 +178,13 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
         setCurrentStep("contract");
       } catch (error) {
         console.error("Error updating template:", error);
-        toast.error("Failed to update template before proceeding", {
-          position: "top-center",
-          description:
-            "There was an error updating the template. Please try again.",
-        });
+        toast.error("Failed to update template before proceeding");
       }
     }
   };
   const handleUpdateProposal = async () => {
     if (!createdProposal?.id) {
-      toast.error("No proposal to update", {
-        position: "top-center",
-        description:
-          "Unable to find the proposal to update. Please try creating a new proposal.",
-      });
+      toast.error("No proposal to update");
       return;
     }
 
@@ -211,11 +213,11 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
             try {
               const updatedProposal = await getProposalById(createdProposal.id);
               setCreatedProposal(updatedProposal.data);
-              handleNext();
+              handleNext(); // Navigate to next step
               resolve(data);
             } catch (error) {
               console.error("Error refreshing proposal:", error);
-              handleNext();
+              handleNext(); // Navigate even if refresh fails
               resolve(data);
             }
           },
@@ -301,11 +303,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     const errors = validateAllProposalFields(formData);
     setDetailsErrors(errors);
     if (Object.keys(errors).length > 0) {
-      toast.error("Please fill in all required fields correctly", {
-        position: "top-center",
-        description:
-          "Check the highlighted fields and correct any errors before proceeding",
-      });
+      toast.error("Please fill in all required fields correctly.");
       return;
     }
 
@@ -365,11 +363,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
               },
             });
           } catch (error) {
-            toast.error("Proposal created but contract creation failed", {
-              position: "top-center",
-              description:
-                "The proposal was created successfully, but there was an error creating the contract",
-            });
+            toast.error("Proposal created but contract creation failed");
             resolve(proposalData);
           }
           handleNext();
@@ -387,10 +381,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
 
   const handleUpdateTemplate = async () => {
     if (!templateId) {
-      toast.error("Template ID is missing", {
-        position: "top-center",
-        description: "Unable to find the template to update. Please try again.",
-      });
+      toast.error("Template ID is missing");
       return Promise.reject("Template ID is missing");
     }
 
