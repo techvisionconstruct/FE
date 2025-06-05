@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, Tabs, TabsContent, Button } from "@/components/shared";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
@@ -24,9 +24,11 @@ import { ElementResponse } from "@/types/elements/dto";
 import { createTemplate } from "@/api-calls/templates/create-template";
 import { updateTemplate } from "@/api-calls/templates/update-template";
 
+const LOCAL_KEY = "simple-projex-template-create";
+
 export default function CreateTemplate() {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState<string>("details");
+  const [currentStep, setCurrentStep] = useState<"details" | "trades" | "preview">("details");
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTourRunning, setIsTourRunning] = useState(false);
@@ -35,11 +37,53 @@ export default function CreateTemplate() {
     description: "",
     image: undefined,
   });
+  const [hydrated, setHydrated] = useState(false);
 
   const [tradeObjects, setTradeObjects] = useState<TradeResponse[]>([]);
-  const [variableObjects, setVariableObjects] = useState<VariableResponse[]>(
-    []
-  );
+  const [variableObjects, setVariableObjects] = useState<VariableResponse[]>([]);
+
+  // Load state from localStorage on mount
+useEffect(() => {
+  const saved = localStorage.getItem(LOCAL_KEY);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      setCurrentStep(parsed.currentStep || "details");
+      setTemplateId(parsed.templateId || null);
+      setFormData(parsed.formData || { name: "", description: "", image: undefined });
+      setTradeObjects(parsed.tradeObjects || []);
+      setVariableObjects(parsed.variableObjects || []);
+    } catch {
+      // ignore
+    }
+  } else {
+  const hash = window.location.hash.replace("#", "");
+  if (hash === "trades" || hash === "preview" || hash === "details") {
+    setCurrentStep(hash);
+  } else {
+    setCurrentStep("details");
+  }
+}
+
+  // Mark as ready to render
+  setHydrated(true);
+}, []);
+
+  // Save state to localStorage and update URL hash on change
+  useEffect(() => {
+    localStorage.setItem(
+      LOCAL_KEY,
+      JSON.stringify({
+        currentStep,
+        templateId,
+        formData,
+        tradeObjects,
+        variableObjects,
+      })
+    );
+    // Update the URL hash to reflect the current tab
+    window.location.hash = currentStep;
+  }, [currentStep, templateId, formData, tradeObjects, variableObjects]);
 
   const updateFormData = (field: string, data: any) => {
     setFormData((prev) => ({
@@ -48,13 +92,27 @@ export default function CreateTemplate() {
     }));
   };
 
-  const handleNext = () => {
-    if (currentStep === "details") {
-      setCurrentStep("trades");
-    } else if (currentStep === "trades") {
-      setCurrentStep("preview");
+  const handleNext = async () => {
+  if (currentStep === "details") {
+    setCurrentStep("trades");
+  } else if (currentStep === "trades") {
+    if (tradeObjects.length < 1) {
+      toast.error("Please add at least one trade before proceeding.");
+      return;
     }
-  };
+    const hasTradeWithoutElement = tradeObjects.some(
+      (trade) => !trade.elements || trade.elements.length < 1
+    );
+    if (hasTradeWithoutElement) {
+      toast.error("Each trade must have at least one element.");
+      return;
+    }
+
+    await handleUpdateTemplate("trades");
+    setCurrentStep("preview");
+  }
+};
+
 
   const handleBack = () => {
     if (currentStep === "trades") {
@@ -66,17 +124,20 @@ export default function CreateTemplate() {
 
   const createTemplateMutation = useMutation({
     mutationFn: createTemplate,
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast.success("Template created successfully!", {
         description: "Your template has been saved",
       });
+      setTemplateId(data.data.id);
       handleNext();
+      setIsLoading(false);
     },
     onError: (error: any) => {
       toast.error("Failed to create template", {
         description:
           error instanceof Error ? error.message : "Please try again later",
       });
+      setIsLoading(false);
     },
   });
 
@@ -90,12 +151,14 @@ export default function CreateTemplate() {
         description: "Your template has been saved",
       });
       handleNext();
+      setIsLoading(false);
     },
     onError: (error: any) => {
       toast.error("Failed to update template", {
         description:
           error instanceof Error ? error.message : "Please try again later",
       });
+      setIsLoading(false);
     },
   });
 
@@ -104,21 +167,22 @@ export default function CreateTemplate() {
       templateId: string;
       template: TemplateUpdateRequest;
     }) => updateTemplate(data.templateId, data.template),
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success("Template published successfully!", {
         description: "Your template is now available",
       });
-
-      // After successful publish, redirect to template list or view page
       setTimeout(() => {
+        localStorage.removeItem(LOCAL_KEY);
         router.push("/templates");
       }, 1500);
+      setIsLoading(false);
     },
     onError: (error: any) => {
       toast.error("Failed to publish template", {
         description:
           error instanceof Error ? error.message : "Please try again later",
       });
+      setIsLoading(false);
     },
   });
 
@@ -132,14 +196,9 @@ export default function CreateTemplate() {
       status: "draft",
     };
 
-    console.log(
-      "Creating template with image:",
-      templateDetails.image ? "Yes (base64)" : "No"
-    );
-
     return new Promise((resolve, reject) => {
       createTemplateMutation.mutate(templateDetails, {
-        onSuccess: (data) => {
+        onSuccess: (data: any) => {
           resolve(data);
           setTemplateId(data.data.id);
           setIsLoading(false);
@@ -156,7 +215,6 @@ export default function CreateTemplate() {
     });
   };
 
-  // --- Update handleUpdateTemplate to check for missing variables ---
   const handleUpdateTemplate = async (step = currentStep) => {
     if (!templateId) {
       toast.error("Template ID is missing");
@@ -187,6 +245,7 @@ export default function CreateTemplate() {
   const handlePublishTemplate = async () => {
     if (!templateId) {
       toast.error("Template ID is missing");
+      localStorage.removeItem(LOCAL_KEY);
       return Promise.reject("Template ID is missing");
     }
 
@@ -210,77 +269,41 @@ export default function CreateTemplate() {
   // Update startTour function with better CSS class identification
   const startTour = () => {
     try {
-      // First ensure we're on the details tab
       setCurrentStep("details");
-
-      console.log("[Tour] Preparing to start template tour");
-
-      // Allow tab switch to happen first
       setTimeout(() => {
-        try {
-          console.log("[Tour] Adding CSS classes for tour targeting");
-
-          // Add CSS classes for steps and make elements focusable
-          document.querySelectorAll('[role="tab"]').forEach((tab) => {
-            try {
-              const value =
-                tab.getAttribute("data-value") || tab.getAttribute("value");
-              if (value) {
-                tab.classList.add("tab-trigger");
-                tab.setAttribute("data-value", value);
-                tab.setAttribute("tabindex", "0");
-                console.log(`[Tour] Found tab: ${value}`);
-              }
-            } catch (e) {
-              console.error("[Tour] Error processing tab", e);
-            }
-          });
-
-          // Add classes to tab contents for targeting
-          document.querySelectorAll('[role="tabpanel"]').forEach((content) => {
-            try {
-              const tabId =
-                content.getAttribute("id") ||
-                content.getAttribute("data-state");
-              if (tabId) {
-                const tabValue = tabId
-                  .replace("content-", "")
-                  .replace("-tabpanel", "");
-                content.classList.add(`${tabValue}-tab-content`);
-                console.log(`[Tour] Found tab content: ${tabValue}`);
-              }
-            } catch (e) {
-              console.error("[Tour] Error processing tab content", e);
-            }
-          });
-
-          // Find and add class to trade section
-          const tradeSection = document.querySelector(".lg\\:col-span-8");
-          if (tradeSection) {
-            tradeSection.classList.add("trade-section");
-            tradeSection.setAttribute("tabindex", "0");
-            console.log("[Tour] Added class to trade section");
-          } else {
-            console.warn("[Tour] Trade section not found");
+        document.querySelectorAll('[role="tab"]').forEach((tab) => {
+          const value =
+            tab.getAttribute("data-value") || tab.getAttribute("value");
+          if (value) {
+            tab.classList.add("tab-trigger");
+            tab.setAttribute("data-value", value);
+            tab.setAttribute("tabindex", "0");
           }
-
-          // Find and add class to variable section
-          const variableSection = document.querySelector(".lg\\:col-span-4");
-          if (variableSection) {
-            variableSection.classList.add("variable-section");
-            variableSection.setAttribute("tabindex", "0");
-            console.log("[Tour] Added class to variable section");
-          } else {
-            console.warn("[Tour] Variable section not found");
+        });
+        document.querySelectorAll('[role="tabpanel"]').forEach((content) => {
+          const tabId =
+            content.getAttribute("id") || content.getAttribute("data-state");
+          if (tabId) {
+            const tabValue = tabId
+              .replace("content-", "")
+              .replace("-tabpanel", "");
+            content.classList.add(`${tabValue}-tab-content`);
           }
-
-          console.log("[Tour] Starting template tour");
-          setIsTourRunning(true);
-        } catch (error) {
-          console.error("[Tour] Error preparing tour:", error);
+        });
+        const tradeSection = document.querySelector(".lg\\:col-span-8");
+        if (tradeSection) {
+          tradeSection.classList.add("trade-section");
+          tradeSection.setAttribute("tabindex", "0");
         }
-      }, 500); // Give more time for the DOM to be ready
+        const variableSection = document.querySelector(".lg\\:col-span-4");
+        if (variableSection) {
+          variableSection.classList.add("variable-section");
+          variableSection.setAttribute("tabindex", "0");
+        }
+        setIsTourRunning(true);
+      }, 500);
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error("[Tour] Error in startTour:", error);
     }
   };
@@ -303,14 +326,14 @@ export default function CreateTemplate() {
             }
           />
         </div>
-
+            { hydrated && currentStep && (
         <Tabs value={currentStep} className="w-full">
           <TabsContent value="details" className="p-6 details-tab-content">
             <TemplateDetailsStep
               data={{
                 name: formData.name,
                 description: formData.description || "",
-                image: formData.image, // Pass the image
+                image: formData.image,
               }}
               updateData={(data) => updateFormData("details", data)}
             />
@@ -375,7 +398,7 @@ export default function CreateTemplate() {
                 Back
               </Button>
               <Button
-                onClick={() => handleUpdateTemplate()}
+                onClick={handleNext}
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -417,6 +440,7 @@ export default function CreateTemplate() {
             </div>
           </TabsContent>
         </Tabs>
+            )}
       </Card>
 
       {/* Tour component */}

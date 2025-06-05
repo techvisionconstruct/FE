@@ -9,6 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   Button,
+  ImageUpload,
 } from "@/components/shared";
 import {
   FileUpload,
@@ -260,6 +261,20 @@ const ProposalDetailsTab: React.FC<ProposalDetailsTabProps> = ({
                   />
                 </PopoverContent>
               </Popover>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="image">
+                Proposal Image{" "}
+                <span className="text-gray-400">&#40;Optional&#41;</span>
+              </Label>
+              <ImageUpload
+                value={data.image || ""}
+                onChange={(value) => handleChange("image", value)}
+                placeholder="Click or drag to upload proposal image"
+                aspect="rectangle"
+                height={200}
+              />
             </div>
           </div>
         </div>
