@@ -56,7 +56,8 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     name: string;
     description: string;
     image: string;
-    client_name: string;    client_email: string;
+    client_name: string;
+    client_email: string;
     client_phone: string;
     client_address: string;
     valid_until: string;
@@ -70,7 +71,9 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
     client_name: proposal?.client_name || "",
     client_email: proposal?.client_email || "",
     client_phone: proposal?.client_phone || "",
-    client_address: proposal?.client_address || "",    valid_until: proposal?.valid_until      ? typeof proposal.valid_until === "string"
+    client_address: proposal?.client_address || "",
+    valid_until: proposal?.valid_until
+      ? typeof proposal.valid_until === "string"
         ? proposal.valid_until
         : proposal.valid_until.toISOString()
       : "",
@@ -162,15 +165,21 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
         toast.error("At least one trade is required to proceed.");
         return;
       }
-      
+
       // Check that each trade has at least one element
-      const tradesWithoutElements = tradeObjects.filter(trade => !trade.elements || trade.elements.length === 0);
+      const tradesWithoutElements = tradeObjects.filter(
+        (trade) => !trade.elements || trade.elements.length === 0
+      );
       if (tradesWithoutElements.length > 0) {
-        const tradeNames = tradesWithoutElements.map(trade => `"${trade.name}"`).join(", ");
-        toast.error(`Each trade must have at least one element. The following trades are missing elements: ${tradeNames}`);
+        const tradeNames = tradesWithoutElements
+          .map((trade) => `"${trade.name}"`)
+          .join(", ");
+        toast.error(
+          `Each trade must have at least one element. The following trades are missing elements: ${tradeNames}`
+        );
         return;
       }
-      
+
       try {
         await handleUpdateTemplate();
         if (createdProposal?.id) {
@@ -204,7 +213,8 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
       status: formData.status,
       image: formData.image,
       client_name: formData.client_name,
-      client_email: formData.client_email,      client_phone: formData.client_phone,
+      client_email: formData.client_email,
+      client_phone: formData.client_phone,
       client_address: formData.client_address,
       valid_until: formData.valid_until,
       project_location: formData.project_location,
@@ -320,22 +330,24 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
       return;
     }
 
-    const templateId = formData.template ? formData.template.id : null;    const proposalDetails = {
+    const templateId = formData.template ? formData.template.id : null;
+    const proposalDetails = {
       name: formData.name,
       description: formData.description,
       status: formData.status,
       image: formData.image,
       client_name: formData.client_name,
-      client_email: formData.client_email,      client_phone: formData.client_phone,
+      client_email: formData.client_email,
+      client_phone: formData.client_phone,
       client_address: formData.client_address,
       valid_until: formData.valid_until,
       project_location: formData.project_location,
       template: templateId || null,
     };
 
-    console.log('Proposal details being sent:', {
+    console.log("Proposal details being sent:", {
       valid_until: formData.valid_until,
-      project_location: formData.project_location
+      project_location: formData.project_location,
     });
 
     return new Promise((resolve, reject) => {
@@ -447,6 +459,7 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL;
     const token = Cookies.get("auth-token");
+    console.log(token);
     setIsSending(true);
     try {
       const response = await fetch(`${API_URL}/v1/proposals/send/`, {
@@ -511,10 +524,6 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                     variant="outline"
                     className="mb-4"
                     onClick={() => {
-                      if (!validateVariables()) {
-                        setShowMissingVariablesDialog(true); // Show dialog if validation fails
-                        return;
-                      }
                       sendProposalToClient();
                     }}
                     disabled={
@@ -619,7 +628,8 @@ export default function CreateProposalPage({ proposal }: ProposalDetailsProps) {
                 description: formData.description,
                 image: formData.image,
                 client_name: formData.client_name,
-                client_email: formData.client_email,                client_phone: formData.client_phone,
+                client_email: formData.client_email,
+                client_phone: formData.client_phone,
                 client_address: formData.client_address,
                 valid_until: formData.valid_until,
                 project_location: formData.project_location,

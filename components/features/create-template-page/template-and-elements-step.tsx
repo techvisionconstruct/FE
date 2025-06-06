@@ -645,22 +645,25 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     };
     setIsSubmitting(true);
     createVariableMutation(variableData);
-  };
-
-  const handleRemoveVariable = (variableId: string) => {
+  };  const handleRemoveVariable = (variableId: string) => {
     const usedInElements = findElementsUsingVariable(variableId);
-    if (usedInElements.length > 0) {
-      setVariableToRemove(
-        localVariables.find((v) => v.id === variableId) || null
-      );
-      setElementsUsingVariable(usedInElements);
-      setShowRemoveVariableConfirm(true);
+    const usedInVariables = findVariablesUsingVariable(variableId);
+
+    console.log("Removing variable:", variableId);
+    console.log("Used in elements:", usedInElements);
+    console.log("Used in variables:", usedInVariables);
+    console.log("Total trades:", trades.length);
+    console.log("All trades with elements:", trades.map(t => ({ id: t.id, name: t.name, elementCount: t.elements?.length || 0 })));
+
+    if (usedInElements.length > 0 || usedInVariables.length > 0) {
+      // Show enhanced warning dialog if variable is used in elements or other variable formulas
+      setVariableToRemove(localVariables.find((v) => v.id === variableId) || null);
+      setAffectedElements(usedInElements);
+      setAffectedVariables(usedInVariables);
+      setShowRemoveVariableDialog(true);
     } else {
-      const updatedVariables = localVariables.filter(
-        (v) => v.id !== variableId
-      );
-      setLocalVariables(updatedVariables);
-      updateVariables(updatedVariables);
+      // Directly remove variable if not used anywhere
+      confirmRemoveVariable(variableId);
     }
   };
 
@@ -846,7 +849,6 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
     
     createTradeMutation(tradeData);
   };
-
   const handleSelectElement = (element: ElementResponse, tradeId: string) => {
     const updatedTrades = trades.map((trade) => {
       if (trade.id === tradeId) {
@@ -870,6 +872,84 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         tradeId: tradeId,
         data: { elements: elementIds },
       });
+    }    // Auto-import variables from element formulas
+    const variablesToAdd: VariableResponse[] = [];
+
+    // Extract variable names from material formula
+    if (element.material_cost_formula) {
+      const materialFormulaVariableNames = extractVariableNamesFromFormula(
+        replaceVariableIdsWithNames(
+          element.material_cost_formula,
+          localVariables,
+          element.material_formula_variables || []
+        )
+      );
+
+      materialFormulaVariableNames.forEach((varName) => {
+        // Find in available variables but not in current variables
+        const availableVariable = variablesData?.data?.find(
+          (v: VariableResponse) =>
+            v.name === varName &&
+            !localVariables.some((existingVar) => existingVar.name === varName)
+        );
+
+        if (
+          availableVariable &&
+          !variablesToAdd.some((v) => v.id === availableVariable.id)
+        ) {
+          variablesToAdd.push(availableVariable);
+        }
+      });
+    }
+
+    // Extract variable names from labor formula
+    if (element.labor_cost_formula) {
+      const laborFormulaVariableNames = extractVariableNamesFromFormula(
+        replaceVariableIdsWithNames(
+          element.labor_cost_formula,
+          localVariables,
+          element.labor_formula_variables || []
+        )
+      );
+
+      laborFormulaVariableNames.forEach((varName) => {
+        // Find in available variables but not in current variables
+        const availableVariable = variablesData?.data?.find(
+          (v: VariableResponse) =>
+            v.name === varName &&
+            !localVariables.some((existingVar) => existingVar.name === varName)
+        );
+
+        if (
+          availableVariable &&
+          !variablesToAdd.some((v) => v.id === availableVariable.id)
+        ) {
+          variablesToAdd.push(availableVariable);
+        }
+      });
+    }
+
+    // Add the variables to current variables
+    if (variablesToAdd.length > 0) {
+      const updatedVariables = [...localVariables, ...variablesToAdd];
+      setLocalVariables(updatedVariables);
+      updateVariables(updatedVariables);
+
+      // Update template if needed
+      if (templateId) {
+        updateTemplateMutation({
+          templateId: templateId,
+          data: { variables: updatedVariables.map((v) => v.id) },
+        });
+      }
+
+      toast.success(
+        `${variablesToAdd.length} variables automatically added`,
+        {
+          position: "top-center",
+          description: `Required variables for "${element.name}" formulas have been imported.`,
+        }
+      );
     }
 
     setIsElementSearchOpen(false);
@@ -985,50 +1065,90 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
       data: elementData,
     });
   };
-
   // Confirm remove
-  const confirmRemoveVariable = () => {
-    if (variableToRemove) {
-      const updatedVariables = localVariables.filter(
-        (v) => v.id !== variableToRemove.id
-      );
-      setLocalVariables(updatedVariables);
-      updateVariables(updatedVariables);
+  const confirmRemoveVariable = (variableId?: string) => {
+    const idToRemove = variableId || variableToRemove?.id;
+    if (!idToRemove) return;
 
-      // Update template when variable is removed
-      console.log("Template ID:", templateId);
-      console.log("Updated variables after removal:", updatedVariables.map(v => v.id));
-      console.log("Current trades:", trades.map(t => t.id));
+    const usedInElements = findElementsUsingVariable(idToRemove);
+    
+    // Update variables
+    const updatedVariables = localVariables.filter((v) => v.id !== idToRemove);
+    setLocalVariables(updatedVariables);
+    updateVariables(updatedVariables);
+
+    // Update trades to remove elements that were using the variable
+    if (usedInElements.length > 0) {
+      const elementsToRemove = new Set(usedInElements.map(e => e.id));
       
-      if (templateId) {
-        console.log("Calling updateTemplateMutation after variable removal...");
-        updateTemplateMutation({
-          templateId: templateId,
-          data: {
-            trades: trades.map(t => t.id),
-            variables: updatedVariables.map(v => v.id),
-          }
+      const updatedTrades = trades.map((trade) => {
+        const filteredElements = (trade.elements || []).filter(
+          (element) => !elementsToRemove.has(element.id)
+        );
+        
+        // Only update the trade if elements were actually removed
+        if (filteredElements.length !== (trade.elements || []).length) {
+          return {
+            ...trade,
+            elements: filteredElements,
+          };
+        }
+        return trade;
+      });
+
+      // Update trades state
+      updateTrades(updatedTrades);
+
+      // Update trades on the server
+      const tradesToUpdate = updatedTrades.filter((trade, index) => {
+        const originalTrade = trades[index];
+        return (trade.elements || []).length !== (originalTrade.elements || []).length;
+      });
+
+      // Update each affected trade
+      tradesToUpdate.forEach((trade) => {
+        updateTradeMutation({
+          tradeId: trade.id,
+          data: { elements: (trade.elements || []).map((e) => e.id) },
         });
-      } else {
-        console.log("Template ID is missing, cannot update template");
-      }
-
-      setShowRemoveVariableConfirm(false);
-      setVariableToRemove(null);
-      setElementsUsingVariable([]);
-
-      toast.success("Variable removed from template", {
-        position: "top-center",
-        description: "Variable has been removed and template updated automatically.",
       });
     }
-  };
 
+    // Update template when variable is removed
+    if (templateId) {
+      console.log("Calling updateTemplateMutation after variable removal...");
+      updateTemplateMutation({
+        templateId: templateId,
+        data: {
+          trades: trades.map(t => t.id),
+          variables: updatedVariables.map(v => v.id),
+        }
+      });
+    }
+
+    // Reset dialog states
+    setShowRemoveVariableConfirm(false);
+    setShowRemoveVariableDialog(false);
+    setVariableToRemove(null);
+    setElementsUsingVariable([]);
+    setAffectedElements([]);
+    setAffectedVariables([]);
+
+    toast.success("Variable removed from template", {
+      position: "top-center",
+      description: usedInElements.length > 0 
+        ? `Variable and ${usedInElements.length} affected element(s) removed from template.`
+        : "Variable has been removed and template updated automatically.",
+    });
+  };
   // Cancel remove
   const cancelRemoveVariable = () => {
     setShowRemoveVariableConfirm(false);
+    setShowRemoveVariableDialog(false);
     setVariableToRemove(null);
-  setElementsUsingVariable([]);
+    setElementsUsingVariable([]);
+    setAffectedElements([]);
+    setAffectedVariables([]);
   };
   // Handler to open edit dialog and prefill form
   const handleOpenEditVariableDialog = (variable: VariableResponse) => {
@@ -1138,13 +1258,22 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   const [tradeTouched, setTradeTouched] = useState({
     name: false,
   });
-
   const [showRemoveVariableConfirm, setShowRemoveVariableConfirm] =
     useState(false);
   const [variableToRemove, setVariableToRemove] =
     useState<VariableResponse | null>(null);
   const [elementsUsingVariable, setElementsUsingVariable] = useState<
     ElementResponse[]
+  >([]);
+  
+  // New state for enhanced variable removal dialog
+  const [showRemoveVariableDialog, setShowRemoveVariableDialog] =
+    useState(false);
+  const [affectedElements, setAffectedElements] = useState<ElementResponse[]>(
+    []
+  );
+  const [affectedVariables, setAffectedVariables] = useState<
+    VariableResponse[]
   >([]);
   const [showMissingVariableDialog, setShowMissingVariableDialog] =
     useState(false);
@@ -1201,23 +1330,73 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
 
   const handleTradeBlur = (field: any) => {
     setTradeTouched((prev) => ({ ...prev, [field]: true }));
-  };
-
-  // Helper: Find elements using a variable
+  };  // Helper: Find elements using a variable
   const findElementsUsingVariable = (variableId: string) => {
     const usedIn: ElementResponse[] = [];
-    trades.forEach((trade) => {
-      (trade.elements || []).forEach((element) => {
+    
+    console.log("Finding elements using variable:", variableId);
+    console.log("Total trades to check:", trades.length);
+    
+    trades.forEach((trade, tradeIndex) => {
+      console.log(`Trade ${tradeIndex} (${trade.name}): ${trade.elements?.length || 0} elements`);
+      
+      (trade.elements || []).forEach((element, elementIndex) => {
+        console.log(`  Element ${elementIndex} (${element.name}):`);
+        console.log(`    Material formula: ${element.material_cost_formula}`);
+        console.log(`    Labor formula: ${element.labor_cost_formula}`);
+        console.log(`    Material formula vars:`, element.material_formula_variables);
+        console.log(`    Labor formula vars:`, element.labor_formula_variables);
+        
         // Check both material and labor formulas for variable usage
+        // First, try the variable arrays approach
         const materialVars = element.material_formula_variables || [];
         const laborVars = element.labor_formula_variables || [];
-        if (
-          materialVars.some((v) => v.id === variableId) ||
-          laborVars.some((v) => v.id === variableId)
-        ) {
+        
+        let isUsedInMaterial = materialVars.some((v) => v.id === variableId);
+        let isUsedInLabor = laborVars.some((v) => v.id === variableId);
+        
+        console.log(`    Variable ${variableId} found in material arrays: ${isUsedInMaterial}`);
+        console.log(`    Variable ${variableId} found in labor arrays: ${isUsedInLabor}`);
+        
+        // If the variable arrays are empty or don't contain the variable,
+        // check the actual formulas for variable references
+        if (!isUsedInMaterial && element.material_cost_formula) {
+          const variablePattern = new RegExp(`\\{${variableId}\\}`, "g");
+          isUsedInMaterial = variablePattern.test(element.material_cost_formula);
+          console.log(`    Variable ${variableId} found in material formula string: ${isUsedInMaterial}`);
+        }
+        
+        if (!isUsedInLabor && element.labor_cost_formula) {
+          const variablePattern = new RegExp(`\\{${variableId}\\}`, "g");
+          isUsedInLabor = variablePattern.test(element.labor_cost_formula);
+          console.log(`    Variable ${variableId} found in labor formula string: ${isUsedInLabor}`);
+        }
+        
+        if (isUsedInMaterial || isUsedInLabor) {
+          console.log(`    ✓ Element ${element.name} uses variable ${variableId}`);
           usedIn.push(element);
+        } else {
+          console.log(`    ✗ Element ${element.name} does not use variable ${variableId}`);
         }
       });
+    });
+    
+    console.log(`Total elements using variable ${variableId}:`, usedIn.length);
+    return usedIn;
+  };
+
+  // Helper: Find variables using a variable
+  const findVariablesUsingVariable = (variableId: string) => {
+    const usedIn: VariableResponse[] = [];
+    localVariables.forEach((variable) => {
+      // Check if this variable's formula contains the variable being removed
+      if (variable.formula && variable.id !== variableId) {
+        // Check if the variable ID is referenced in the formula using {id} pattern
+        const variablePattern = new RegExp(`\\{${variableId}\\}`, "g");
+        if (variablePattern.test(variable.formula)) {
+          usedIn.push(variable);
+        }
+      }
     });
     return usedIn;
   };
@@ -2530,8 +2709,7 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
         </DialogContent>
       </Dialog>
 
-      {/* Confirmation dialog for removing variables that are used in elements */}
-      <ConfirmDialog 
+      {/* Confirmation dialog for removing variables that are used in elements */}      <ConfirmDialog
         open={showRemoveVariableConfirm} 
         onOpenChange={setShowRemoveVariableConfirm}
       >
@@ -2560,12 +2738,92 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
             <Button variant="outline" onClick={cancelRemoveVariable}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmRemoveVariable}>
+            <Button variant="destructive" onClick={() => confirmRemoveVariable()}>
               Remove Variable
             </Button>
           </ConfirmDialogFooter>
         </ConfirmDialogContent>
       </ConfirmDialog>
+
+      {/* Enhanced Remove variable confirmation dialog */}
+      <Dialog
+        open={showRemoveVariableDialog}
+        onOpenChange={setShowRemoveVariableDialog}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-medium">
+              Remove Variable
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-2">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to remove this variable? This action cannot
+              be undone.
+            </p>
+            {affectedElements.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-medium text-muted-foreground mb-1">
+                  Affected Elements:
+                </p>
+                <ul className="list-disc list-inside text-sm text-muted-foreground">
+                  {affectedElements.map((element) => (
+                    <li key={element.id} className="flex items-center gap-2">
+                      <BracesIcon className="h-4 w-4" />
+                      {element.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {affectedVariables.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-medium text-muted-foreground mb-1">
+                  Affected Variables:
+                </p>
+                <ul className="list-disc list-inside text-sm text-muted-foreground">
+                  {affectedVariables.map((variable) => (
+                    <li key={variable.id} className="flex items-center gap-2">
+                      <Variable className="h-4 w-4" />
+                      {variable.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {(affectedElements.length > 0 || affectedVariables.length > 0) && (
+              <p className="text-xs text-red-500 mt-2">
+                Removing this variable will also remove it from all{" "}
+                {affectedElements.length > 0 ? "elements" : ""}
+                {affectedElements.length > 0 && affectedVariables.length > 0
+                  ? " and "
+                  : ""}
+                {affectedVariables.length > 0 ? "variable formulas" : ""} where
+                it is used.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowRemoveVariableDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (variableToRemove) {
+                  confirmRemoveVariable(variableToRemove.id);
+                }
+                setShowRemoveVariableDialog(false);
+              }}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              Remove Variable
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -746,11 +746,6 @@ export function ElementDialog({
       materialFormula,
       laborFormula,
     });
-
-    // Clear all form data after submission
-    setImage("");
-    setName("");
-    setDescription("");
   };
 
   const handleCancel = () => {

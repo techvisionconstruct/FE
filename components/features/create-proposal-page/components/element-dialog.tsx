@@ -537,7 +537,8 @@ export function ElementDialog({
     
     // Clear localStorage before submitting
     clearFormulaStorage();
-      onSubmit({
+    
+    onSubmit({
       name: name.trim(),
       description: description.trim(),
       image,

@@ -454,7 +454,7 @@ useEffect(() => {
                 ) : (
                   "Create Template"
                 )}
-              </Button>
+              </Button>  
             </div>
           </TabsContent>
         </Tabs>
@@ -462,12 +462,12 @@ useEffect(() => {
       </Card>
 
       {/* Tour component */}
-      <CreateTemplateTour
+      {/* <CreateTemplateTour
         isRunning={isTourRunning}
         setIsRunning={setIsTourRunning}
         activeTab={currentStep}
         setActiveTab={setCurrentStep}
-      />
+      /> */}
 
       {/* Help button to start tour */}
       <div className="fixed bottom-6 right-6">
