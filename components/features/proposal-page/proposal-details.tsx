@@ -5,6 +5,7 @@ import { ConfirmationDialog } from "./confirmation-dialog";
 import { ProposalResponse } from "@/types/proposals/dto";
 import { replaceVariableIdsWithNames } from "@/helpers/replace-variable-ids-with-names";
 import Link from "next/link";
+import Cookies from "js-cookie";
 
 interface ProposalDetailsProps {
   proposal: ProposalResponse;
@@ -19,10 +20,12 @@ export function ProposalDetails({ proposal }: ProposalDetailsProps) {
     const API_URL = process.env.NEXT_PUBLIC_API_URL;
     setIsSending(true);
     try {
+      const token = Cookies.get("auth-token");
       const response = await fetch(`${API_URL}/v1/proposals/send/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           proposal_id: proposal.id,
