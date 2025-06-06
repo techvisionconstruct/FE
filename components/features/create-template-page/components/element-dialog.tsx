@@ -21,8 +21,8 @@ import { FormulaBuilder } from "./formula-builder";
 import { FormulaToken, useFormula } from "../hooks/use-formula";
 import { toast } from "sonner";
 import { ProductResponse } from "@/types/products/dto";
-import { useQuery } from "@tanstack/react-query";
-import { getProducts } from "@/query-options/products";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { getProducts, getProductsInfinite } from "@/query-options/products";
 import { getFormulaValidationMessage } from "@/components/utils/formula-validation-message";
 
 // Storage keys for formulas - make them unique to avoid conflicts
@@ -77,7 +77,9 @@ export function ElementDialog({
   // Track if this is the first render of the dialog since opening
   const initialRenderRef = useRef(true);
   const [name, setName] = useState(elementToEdit?.name || initialName);
-  const [description, setDescription] = useState(elementToEdit?.description || "");
+  const [description, setDescription] = useState(
+    elementToEdit?.description || ""
+  );
   const [image, setImage] = useState<string>(elementToEdit?.image || "");
 
   // Track which formula field is active/focused
@@ -113,7 +115,32 @@ export function ElementDialog({
   }, [variables]);
 
   // Fetch products to check if formula tokens are products
-  const { data: productsData } = useQuery(getProducts(1, 999));  const {
+  const productsInfiniteQuery = useMemo(() => getProductsInfinite(50), []);
+  const {
+    data: productsInfiniteData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingProducts,
+  } = useInfiniteQuery(productsInfiniteQuery);
+
+  // Flatten all products from infinite query
+  const productsData = useMemo(() => {
+    if (!productsInfiniteData?.pages) return { data: [] };
+    
+    const allProducts = productsInfiniteData.pages.flatMap(page => page.data || []);
+    return { data: allProducts };
+  }, [productsInfiniteData]);
+
+  // Load all products on mount if needed, but with a reasonable limit
+  useEffect(() => {
+    // Keep fetching until we have enough products or reach a reasonable limit
+    // This replaces your original (1, 999) approach with a more efficient pagination
+    if (hasNextPage && !isFetchingNextPage && productsData.data.length < 500) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, productsData.data.length]);
+  const {
     materialFormulaTokens,
     setMaterialFormulaTokens,
     laborFormulaTokens,
@@ -128,28 +155,35 @@ export function ElementDialog({
   // Calculate dynamic dialog width based on formula content length
   const calculateDialogWidth = useMemo(() => {
     const maxTokenLength = Math.max(
-      ...materialFormulaTokens.map(token => (token.displayText || token.text).length),
-      ...laborFormulaTokens.map(token => (token.displayText || token.text).length),
+      ...materialFormulaTokens.map(
+        (token) => (token.displayText || token.text).length
+      ),
+      ...laborFormulaTokens.map(
+        (token) => (token.displayText || token.text).length
+      ),
       0
     );
-    
-    const tokenCount = Math.max(materialFormulaTokens.length, laborFormulaTokens.length);
-    
+
+    const tokenCount = Math.max(
+      materialFormulaTokens.length,
+      laborFormulaTokens.length
+    );
+
     // Base width for small content
     if (maxTokenLength <= 20 && tokenCount <= 5) {
       return "sm:max-w-4xl"; // Default size
     }
-    
+
     // Medium width for moderate content
     if (maxTokenLength <= 40 && tokenCount <= 10) {
       return "sm:max-w-5xl";
     }
-    
+
     // Large width for extensive content
     if (maxTokenLength <= 60 && tokenCount <= 15) {
       return "sm:max-w-6xl";
     }
-    
+
     // Extra large for very long product names or many tokens
     return "sm:max-w-7xl";
   }, [materialFormulaTokens, laborFormulaTokens]);
@@ -207,20 +241,20 @@ export function ElementDialog({
       setImage("");
       setName("");
       setDescription("");
-      
+
       // Clear formula tokens
       setMaterialFormulaTokens([]);
       setLaborFormulaTokens([]);
-      
+
       // Clear localStorage
       clearFormulaStorage();
-      
+
       // Reset errors
       setMaterialFormulaError(null);
       setLaborFormulaError(null);
       setElementErrors({ name: "" });
       setElementTouched({ name: false });
-      
+
       // Reset pending variable
       pendingVariableRef.current = {
         variable: null,
@@ -256,15 +290,17 @@ export function ElementDialog({
       } else if (elementToEdit) {
         // Initialize from element to edit
         let materialTokens = [],
-          laborTokens = [];        if (elementToEdit.material_cost_formula) {
+          laborTokens = [];
+        if (elementToEdit.material_cost_formula) {
           // For variables, we want to display names instead of IDs for better user experience
           let displayFormula = replaceIdsWithNamesInFormula(
             elementToEdit.material_cost_formula,
             filteredVariables,
             elementToEdit.material_formula_variables || [],
             productsData?.data
-          );          materialTokens = parseFormulaToTokens(displayFormula);
-          
+          );
+          materialTokens = parseFormulaToTokens(displayFormula);
+
           materialTokens = materialTokens.map((token) => {
             // First check if this token is a product in formula variables
             if (
@@ -289,7 +325,8 @@ export function ElementDialog({
               const productByName = productsData?.data?.find(
                 (product: ProductResponse) =>
                   product.title.toLowerCase() === token.text.toLowerCase() ||
-                  product.title.toLowerCase() === token.displayText?.toLowerCase()
+                  product.title.toLowerCase() ===
+                    token.displayText?.toLowerCase()
               );
 
               if (productByName) {
@@ -312,14 +349,16 @@ export function ElementDialog({
           );
         } else {
           setMaterialFormulaTokens([]);
-        }        if (elementToEdit.labor_cost_formula) {
+        }
+        if (elementToEdit.labor_cost_formula) {
           // For variables, we want to display names instead of IDs for better user experience
           let displayFormula = replaceIdsWithNamesInFormula(
             elementToEdit.labor_cost_formula,
             filteredVariables,
             elementToEdit.labor_formula_variables || [],
             productsData?.data
-          );          laborTokens = parseFormulaToTokens(displayFormula);
+          );
+          laborTokens = parseFormulaToTokens(displayFormula);
 
           laborTokens = laborTokens.map((token) => {
             // First check if this token is a product in formula variables
@@ -345,7 +384,8 @@ export function ElementDialog({
               const productByName = productsData?.data?.find(
                 (product: ProductResponse) =>
                   product.title.toLowerCase() === token.text.toLowerCase() ||
-                  product.title.toLowerCase() === token.displayText?.toLowerCase()
+                  product.title.toLowerCase() ===
+                    token.displayText?.toLowerCase()
               );
 
               if (productByName) {
@@ -384,7 +424,8 @@ export function ElementDialog({
           saveFormulasToStorage();
         }, 100);
       }
-    }  }, [
+    }
+  }, [
     isOpen,
     elementToEdit,
     initialName,
@@ -423,7 +464,10 @@ export function ElementDialog({
     if (pendingVariable.variable && pendingVariable.formulaType) {
       try {
         // Get current formulas from localStorage to ensure we have latest state
-        const { materialTokens: storedMaterialTokens, laborTokens: storedLaborTokens } = getFormulasFromStorage();
+        const {
+          materialTokens: storedMaterialTokens,
+          laborTokens: storedLaborTokens,
+        } = getFormulasFromStorage();
 
         // Create a token for the new variable
         const newToken: FormulaToken = {
@@ -437,52 +481,58 @@ export function ElementDialog({
           if (pendingVariable.formulaType === "material") {
             // Make sure we're using the most up-to-date tokens
             // Either from state or localStorage, whichever has more tokens
-            const baseTokens = materialFormulaTokens.length >= storedMaterialTokens.length
-              ? materialFormulaTokens
-              : storedMaterialTokens;
-              
+            const baseTokens =
+              materialFormulaTokens.length >= storedMaterialTokens.length
+                ? materialFormulaTokens
+                : storedMaterialTokens;
+
             // Update material formula with the new variable
             const updatedMaterialTokens = [...baseTokens, newToken];
             setMaterialFormulaTokens(updatedMaterialTokens);
-            
+
             // Make sure to preserve labor formula - use the tokens with more elements
-            const laborBaseTokens = laborFormulaTokens.length >= storedLaborTokens.length
-              ? laborFormulaTokens
-              : storedLaborTokens;
-              
+            const laborBaseTokens =
+              laborFormulaTokens.length >= storedLaborTokens.length
+                ? laborFormulaTokens
+                : storedLaborTokens;
+
             if (laborBaseTokens.length > 0) {
               setLaborFormulaTokens(laborBaseTokens);
             }
-            
-            console.log(`Variable "${newToken.text}" added to material formula`);
+
+            console.log(
+              `Variable "${newToken.text}" added to material formula`
+            );
           } else if (pendingVariable.formulaType === "labor") {
             // Make sure we're using the most up-to-date tokens
             // Either from state or localStorage, whichever has more tokens
-            const baseTokens = laborFormulaTokens.length >= storedLaborTokens.length
-              ? laborFormulaTokens
-              : storedLaborTokens;
-              
+            const baseTokens =
+              laborFormulaTokens.length >= storedLaborTokens.length
+                ? laborFormulaTokens
+                : storedLaborTokens;
+
             // Update labor formula with the new variable
             const updatedLaborTokens = [...baseTokens, newToken];
             setLaborFormulaTokens(updatedLaborTokens);
-            
+
             // Make sure to preserve material formula - use the tokens with more elements
-            const materialBaseTokens = materialFormulaTokens.length >= storedMaterialTokens.length
-              ? materialFormulaTokens
-              : storedMaterialTokens;
-              
+            const materialBaseTokens =
+              materialFormulaTokens.length >= storedMaterialTokens.length
+                ? materialFormulaTokens
+                : storedMaterialTokens;
+
             if (materialBaseTokens.length > 0) {
               setMaterialFormulaTokens(materialBaseTokens);
             }
-            
+
             console.log(`Variable "${newToken.text}" added to labor formula`);
           }
         }
-        
+
         // Reset the pending variable
         pendingVariableRef.current = {
           variable: null,
-          formulaType: null
+          formulaType: null,
         };
       } catch (error) {
         console.error("Error adding variable to formula:", error);
@@ -539,7 +589,7 @@ export function ElementDialog({
         hasFormulaError = true;
       }
     }
-    
+
     // Exit if there are formula errors
     if (hasFormulaError) return;
 
@@ -558,7 +608,7 @@ export function ElementDialog({
 
     // Clear localStorage before submitting
     clearFormulaStorage();
-    
+
     onSubmit({
       name: name.trim(),
       description: description.trim(),
@@ -738,7 +788,7 @@ export function ElementDialog({
 
     // Clear localStorage before submitting
     clearFormulaStorage();
-    
+
     onSubmit({
       name: name.trim(),
       description: description.trim(),
@@ -765,7 +815,7 @@ export function ElementDialog({
       setName("");
       setDescription("");
       clearFormulaStorage();
-      
+
       // Reset errors and validation state
       setMaterialFormulaError(null);
       setLaborFormulaError(null);
@@ -776,11 +826,10 @@ export function ElementDialog({
   };
 
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={handleDialogOpenChange}
-    >
-      <DialogContent className={`${calculateDialogWidth} max-h-[90vh] overflow-y-auto`}>
+    <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className={`${calculateDialogWidth} max-h-[90vh] overflow-y-auto`}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <BracesIcon className="mr-2 h-4 w-4" />
@@ -912,7 +961,8 @@ export function ElementDialog({
               className="flex items-center justify-between"
             >
               <span className="text-sm font-medium flex items-center">
-                Labor Cost Formula <span className="text-gray-500">&#40;Optional&#41;</span>
+                Labor Cost Formula{" "}
+                <span className="text-gray-500">&#40;Optional&#41;</span>
               </span>
             </Label>
             <FormulaBuilder
@@ -946,33 +996,48 @@ export function ElementDialog({
             }}
           >
             Cancel
-          </Button>          <Button
+          </Button>{" "}
+          <Button
             onClick={() => {
               // Additional validation check right when button is clicked
               if (materialFormulaTokens.length > 0) {
-                const lastMaterialToken = materialFormulaTokens[materialFormulaTokens.length - 1];
-                if (lastMaterialToken && lastMaterialToken.type === "operator" && 
-                    ["+", "-", "*", "/", "(", "^"].includes(lastMaterialToken.text)) {
-                  setMaterialFormulaError(`Formula ends with "${lastMaterialToken.text}" - please complete the formula`);
+                const lastMaterialToken =
+                  materialFormulaTokens[materialFormulaTokens.length - 1];
+                if (
+                  lastMaterialToken &&
+                  lastMaterialToken.type === "operator" &&
+                  ["+", "-", "*", "/", "(", "^"].includes(
+                    lastMaterialToken.text
+                  )
+                ) {
+                  setMaterialFormulaError(
+                    `Formula ends with "${lastMaterialToken.text}" - please complete the formula`
+                  );
                   return;
                 }
               }
-              
+
               if (laborFormulaTokens.length > 0) {
-                const lastLaborToken = laborFormulaTokens[laborFormulaTokens.length - 1];
-                if (lastLaborToken && lastLaborToken.type === "operator" && 
-                    ["+", "-", "*", "/", "(", "^"].includes(lastLaborToken.text)) {
-                  setLaborFormulaError(`Formula ends with "${lastLaborToken.text}" - please complete the formula`);
+                const lastLaborToken =
+                  laborFormulaTokens[laborFormulaTokens.length - 1];
+                if (
+                  lastLaborToken &&
+                  lastLaborToken.type === "operator" &&
+                  ["+", "-", "*", "/", "(", "^"].includes(lastLaborToken.text)
+                ) {
+                  setLaborFormulaError(
+                    `Formula ends with "${lastLaborToken.text}" - please complete the formula`
+                  );
                   return;
                 }
               }
-              
+
               handleSubmitWithImage();
             }}
             disabled={
-              isSubmitting || 
-              !name.trim() || 
-              !!materialFormulaError || 
+              isSubmitting ||
+              !name.trim() ||
+              !!materialFormulaError ||
               !!laborFormulaError
             }
           >
