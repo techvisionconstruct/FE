@@ -1,9 +1,7 @@
 "use client";
 
 import React from "react";
-import { 
-  Badge
-} from "@/components/shared";
+import { Badge } from "@/components/shared";
 import Image from "next/image";
 import { TemplateCreateRequest } from "@/types/templates/dto";
 import { TradeResponse } from "@/types/trades/dto";
@@ -17,21 +15,22 @@ interface PreviewStepProps {
   variableObjects?: VariableResponse[];
 }
 
-const PreviewStep: React.FC<PreviewStepProps> = ({ 
-  data, 
-  tradeObjects = [], 
-  variableObjects = [] 
+const PreviewStep: React.FC<PreviewStepProps> = ({
+  data,
+  tradeObjects = [],
+  variableObjects = [],
 }) => {
   const { replaceIdsWithNamesInFormula } = useFormula();
-  
-  const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b";
-  
+
+  const DEFAULT_IMAGE =
+    "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b";
+
   return (
     <div className="p-0 mx-auto">
       <div className="w-full max-w-8xl relative left-1/2 right-1/2 -translate-x-1/2 h-48 md:h-64 mb-4 rounded-2xl shadow">
         {data.image ? (
           <div className="relative w-full h-full">
-            <Image 
+            <Image
               src={data.image}
               alt={data.name || "Template Preview"}
               fill
@@ -41,7 +40,9 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
           </div>
         ) : (
           <div className="w-full h-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 flex items-center justify-center rounded-2xl">
-            <div className="text-3xl font-bold text-center text-primary/70">Template Preview</div>
+            <div className="text-3xl font-bold text-center text-primary/70">
+              Template Preview
+            </div>
           </div>
         )}
       </div>
@@ -51,14 +52,12 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
       <p className="text-lg text-muted-foreground mb-2">
         {data.description || "No description provided"}
       </p>
-      
+
       <div className="flex flex-wrap gap-2 mt-3 mb-6">
         <Badge variant="outline" className="capitalize">
           Status: {data.status || "draft"}
         </Badge>
-        <Badge variant="outline">
-          {data.is_public ? "Public" : "Private"}
-        </Badge>
+        <Badge variant="outline">{data.is_public ? "Public" : "Private"}</Badge>
       </div>
 
       {variableObjects.length > 0 && (
@@ -72,7 +71,8 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                 key={variable.id}
                 className="inline-block rounded bg-muted px-3 py-1 text-xs font-medium text-muted-foreground border"
               >
-                {variable.name}{variable.value !== undefined && `: ${variable.value}`}
+                {variable.name}
+                {variable.value !== undefined && `: ${variable.value}`}
                 {variable.variable_type && (
                   <span className="text-[10px] text-gray-400 ml-1">
                     ({variable.variable_type.name})
@@ -98,7 +98,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                 <div className="flex items-center gap-3 mb-2">
                   {trade.image ? (
                     <div className="relative w-12 h-12 rounded-md overflow-hidden shrink-0">
-                      <Image 
+                      <Image
                         src={trade.image}
                         alt={trade.name}
                         fill
@@ -128,7 +128,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                         <div className="flex items-center gap-3 p-4 rounded border bg-background">
                           {element.image ? (
                             <div className="relative min-w-[40px] w-10 h-10 rounded-md overflow-hidden shrink-0">
-                              <Image 
+                              <Image
                                 src={element.image}
                                 alt={element.name}
                                 fill
@@ -140,9 +140,11 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                               <ImageIcon className="h-4 w-4 text-muted-foreground/50" />
                             </div>
                           )}
-                          
+
                           <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm">{element.name}</div>
+                            <div className="font-medium text-sm">
+                              {element.name}
+                            </div>
                             {element.description && (
                               <div className="text-xs text-muted-foreground line-clamp-1 mt-1">
                                 {element.description}
@@ -155,11 +157,15 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                               <div className="space-y-1">
                                 {element.material_cost_formula && (
                                   <div className="text-xs">
-                                    <span className="font-medium">Material:</span>{" "}                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
+                                    <span className="font-medium">
+                                      Material:
+                                    </span>{" "}
+                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
                                       {replaceIdsWithNamesInFormula(
                                         element.material_cost_formula,
                                         variableObjects,
-                                        element.material_formula_variables || [],
+                                        element.material_formula_variables ||
+                                          [],
                                         undefined // No products data available in this component
                                       )}
                                     </code>
@@ -167,7 +173,8 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                                 )}
                                 {element.labor_cost_formula && (
                                   <div className="text-xs">
-                                    <span className="font-medium">Labor:</span>{" "}                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
+                                    <span className="font-medium">Labor:</span>{" "}
+                                    <code className="bg-muted/50 px-1 rounded text-[10px]">
                                       {replaceIdsWithNamesInFormula(
                                         element.labor_cost_formula,
                                         variableObjects,
