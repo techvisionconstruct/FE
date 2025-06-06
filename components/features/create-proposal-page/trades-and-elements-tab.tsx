@@ -299,10 +299,9 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   console.log(
     data.variables,
     "🚀 Initial variables data in TradesAndElementsStep"
-  );
-  // API Query for variables (for auto-importing)
+  );  // API Query for variables (for auto-importing)
   const { data: variablesData } = useQuery(
-    getVariables(1, 1000) // Get a large number to ensure we have all available variables
+    getVariables(1, 50) // Get variables for auto-importing
   );
 
   const updateVariableWithFormulaValue = (
@@ -473,12 +472,11 @@ const TradesAndElementsStep: React.FC<TradesAndElementsStepProps> = ({
   );
   const { data: elementsData, isLoading: elementsLoading } = useQuery(
     getElements(1, 10, debouncedElementSearchQuery)
-  );
-  const { data: searchVariablesData, isLoading: variablesLoading } = useQuery(
-    getVariables(1, 10, debouncedSearchQuery)
+  );  const { data: searchVariablesData, isLoading: variablesLoading } = useQuery(
+    getVariables(1, 50, debouncedSearchQuery)
   );
   const { data: productsData, isLoading: productsLoading } = useQuery(
-    getProducts(1, 1000) // Get a large number to ensure we have all products for formulas
+    getProducts(1, 50) // Get products for formulas
   );
   const { data: apiVariableTypes = [], isLoading: isLoadingVariableTypes } =
     useQuery({
