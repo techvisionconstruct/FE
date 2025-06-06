@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { ContractCreateRequest } from "@/types/contracts/dto";
 import Image from "next/image";
+import Cookies from "js-cookie";
 
 interface TermSection {
   id: number;
@@ -1261,12 +1262,15 @@ Any changes to the scope of work must be agreed upon in writing by both parties.
   const sendProposalToClient = async () => {
     if (!proposal.id) return;
     const API_URL = process.env.NEXT_PUBLIC_API_URL;
+    const token = Cookies.get("auth-token");
+    console.log(token)
     setIsSending(true);
     try {
       const response = await fetch(`${API_URL}/v1/proposals/send/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
 
         },
         body: JSON.stringify({
