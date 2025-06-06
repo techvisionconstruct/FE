@@ -21,8 +21,8 @@ import { FormulaBuilder } from "./formula-builder";
 import { FormulaToken, useFormula } from "../hooks/use-formula";
 import { toast } from "sonner";
 import { ProductResponse } from "@/types/products/dto";
-import { useQuery } from "@tanstack/react-query";
-import { getProducts } from "@/query-options/products";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { getProducts, getProductsInfinite } from "@/query-options/products";
 import { getFormulaValidationMessage } from "@/components/utils/formula-validation-message";
 
 // Define a more specific type for pending variables
@@ -32,11 +32,11 @@ interface PendingVariable {
 }
 
 // Storage keys for formulas - make them unique to avoid conflicts
-const STORAGE_PREFIX = 'proposal_element_dialog_';
+const STORAGE_PREFIX = "element_dialog_";
 const getStorageKeys = (dialogId: string) => ({
   MATERIAL_KEY: `${STORAGE_PREFIX}material_${dialogId}`,
   LABOR_KEY: `${STORAGE_PREFIX}labor_${dialogId}`,
-  IS_OPEN_KEY: `${STORAGE_PREFIX}is_open_${dialogId}`
+  IS_OPEN_KEY: `${STORAGE_PREFIX}is_open_${dialogId}`,
 });
 
 interface ElementDialogProps {
@@ -96,7 +96,37 @@ export function ElementDialog({
   const [image, setImage] = useState<string>(elementToEdit?.image || "");
   const [markup, setMarkup] = useState(elementToEdit?.markup || initialMarkup);
 
-  const { data: productsData } = useQuery(getProducts(1, 999));
+  // Track which formula field is active/focused
+  const [activeFormulaField, setActiveFormulaField] = useState<
+    "material" | "labor" | null
+  >(null);
+
+  // Fetch products to check if formula tokens are products
+  const productsInfiniteQuery = useMemo(() => getProductsInfinite(50), []);
+  const {
+    data: productsInfiniteData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingProducts,
+  } = useInfiniteQuery(productsInfiniteQuery);
+
+  // Flatten all products from infinite query
+  const productsData = useMemo(() => {
+    if (!productsInfiniteData?.pages) return { data: [] };
+    
+    const allProducts = productsInfiniteData.pages.flatMap(page => page.data || []);
+    return { data: allProducts };
+  }, [productsInfiniteData]);
+
+  // Load all products on mount if needed, but with a reasonable limit
+  useEffect(() => {
+    // Keep fetching until we have enough products or reach a reasonable limit
+    // This replaces your original (1, 999) approach with a more efficient pagination
+    if (hasNextPage && !isFetchingNextPage && productsData.data.length < 500) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, productsData.data.length]);
   
   // Store pending variable information to be processed after creation
   const pendingVariableRef = useRef<PendingVariable>({
@@ -170,35 +200,17 @@ export function ElementDialog({
     try {
       const materialStr = localStorage.getItem(storageKeys.MATERIAL_KEY);
       const laborStr = localStorage.getItem(storageKeys.LABOR_KEY);
-      
-      let materialTokens: FormulaToken[] = [];
-      let laborTokens: FormulaToken[] = [];
-      
-      if (materialStr) {
-        try {
-          const parsed = JSON.parse(materialStr);
-          if (Array.isArray(parsed)) {
-            materialTokens = parsed;
-          }
-        } catch (e) {
-          console.error('Error parsing material tokens:', e);
-        }
-      }
-      
-      if (laborStr) {
-        try {
-          const parsed = JSON.parse(laborStr);
-          if (Array.isArray(parsed)) {
-            laborTokens = parsed;
-          }
-        } catch (e) {
-          console.error('Error parsing labor tokens:', e);
-        }
-      }
-      
+
+      let materialTokens = materialStr ? JSON.parse(materialStr) : [];
+      let laborTokens = laborStr ? JSON.parse(laborStr) : [];
+
+      // Validate tokens to prevent errors
+      if (!Array.isArray(materialTokens)) materialTokens = [];
+      if (!Array.isArray(laborTokens)) laborTokens = [];
+
       return { materialTokens, laborTokens };
     } catch (err) {
-      console.error('Error reading from localStorage:', err);
+      console.error("Error reading from localStorage:", err);
       return { materialTokens: [], laborTokens: [] };
     }
   };
@@ -212,6 +224,35 @@ export function ElementDialog({
       console.error('Error clearing localStorage:', err);
     }
   };
+
+  // Clear all form data when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      // Clear all form fields
+      setImage("");
+      setName("");
+      setDescription("");
+
+      // Clear formula tokens
+      setMaterialFormulaTokens([]);
+      setLaborFormulaTokens([]);
+
+      // Clear localStorage
+      clearFormulaStorage();
+
+      // Reset errors
+      setMaterialFormulaError(null);
+      setLaborFormulaError(null);
+      setElementErrors({ name: "" });
+      setElementTouched({ name: false });
+
+      // Reset pending variable
+      pendingVariableRef.current = {
+        variable: null,
+        formulaType: null,
+      };
+    }
+  }, [isOpen, setMaterialFormulaTokens, setLaborFormulaTokens]);
 
   // Initialize dialog content
   useEffect(() => {
@@ -507,11 +548,7 @@ export function ElementDialog({
       // Run validation one more time before submitting
       const materialValidation = validateFormulaTokens(materialFormulaTokens);
       if (!materialValidation.isValid) {
-        // Update the error state to trigger button disabling
         setMaterialFormulaError(materialValidation.error);
-        toast.error("Material formula error", {
-          description: materialValidation.error || "Invalid formula"
-        });
         hasFormulaError = true;
       }
     }
@@ -520,24 +557,30 @@ export function ElementDialog({
       // Run validation one more time before submitting
       const laborValidation = validateFormulaTokens(laborFormulaTokens);
       if (!laborValidation.isValid) {
-        // Update the error state to trigger button disabling
         setLaborFormulaError(laborValidation.error);
-        toast.error("Labor formula error", {
-          description: laborValidation.error || "Invalid formula"
-        });
         hasFormulaError = true;
       }
     }
-    
+
     // Exit if there are formula errors
     if (hasFormulaError) return;
 
     const materialFormula = tokensToFormulaString(materialFormulaTokens);
     const laborFormula = tokensToFormulaString(laborFormulaTokens);
-    
+
+    // Log the data that's being submitted when updating an element
+    console.log("Updating element with data:", {
+      name: name.trim(),
+      description: description.trim(),
+      materialFormula,
+      laborFormula,
+      materialTokens: materialFormulaTokens,
+      laborTokens: laborFormulaTokens,
+    });
+
     // Clear localStorage before submitting
     clearFormulaStorage();
-    
+
     onSubmit({
       name: name.trim(),
       description: description.trim(),
@@ -549,26 +592,12 @@ export function ElementDialog({
   };
 
   const handleCreateVariable = (
-    variableName: string, 
+    variableName: string,
     formulaType?: "material" | "labor"
   ) => {
     if (!onRequestCreateVariable) {
       // Fallback if no callback is provided
       if (updateVariables) {
-        // Don't create variable if it's a number
-        if (!isNaN(parseFloat(variableName))) return;
-
-        // Check if variable already exists
-        const existingVar = variables.find(v => v.name.toLowerCase() === variableName.toLowerCase());
-        if (existingVar) {
-          toast.info(`Variable "${variableName}" already exists`);
-          return;
-        }
-
-        // Skip operators
-        if (["+", "-", "*", "/", "(", ")", "^"].includes(variableName)) return;
-
-        // Create temporary variable
         const tempVariable: VariableResponse = {
           id: `temp-${Date.now()}`,
           name: variableName,
@@ -602,37 +631,33 @@ export function ElementDialog({
       return;
     }
 
+    // Save which formula field is active
+    setActiveFormulaField(formulaType || null);
+
     // IMPORTANT: Save current formulas to localStorage before variable creation
     saveFormulasToStorage();
-    
+
     // Use the provided callback to create the variable
     onRequestCreateVariable(variableName, (newVariable) => {
       if (!newVariable) {
-        console.warn("Variable creation callback returned null or undefined");
         return;
       }
-      
+
       try {
-        if (typeof newVariable === 'object' && newVariable.name) {
-          // Set the pending variable
-          pendingVariableRef.current = {
-            variable: newVariable,
-            formulaType: formulaType || null
-          };
-          
-          // Force the useEffect to run with a new reference
-          pendingVariableRef.current = {
-            ...pendingVariableRef.current,
-            variable: {
-              ...newVariable,
-              updated_at: new Date().getTime().toString() // Ensure ref changes
-            }
-          };
-          
-          console.log(`Variable "${newVariable.name}" created, will be added to ${formulaType} formula`);
-        } else {
-          console.error("Invalid variable object structure:", newVariable);
-        }
+        // Set the pending variable
+        pendingVariableRef.current = {
+          variable: newVariable,
+          formulaType: formulaType || null
+        };
+        
+        // Force the useEffect to run with a new reference
+        pendingVariableRef.current = {
+          ...pendingVariableRef.current,
+          variable: {
+            ...newVariable,
+            updated_at: new Date().getTime().toString() // Ensure ref changes
+          }
+        };
       } catch (error) {
         console.error("Error in variable creation callback:", error);
       }
@@ -666,6 +691,77 @@ export function ElementDialog({
     setElementTouched((prev) => ({ ...prev, [field]: true }));
   };
 
+  // Clear image when dialog is closed
+  useEffect(() => {
+    if (!isOpen) {
+      setImage("");
+      // Clear other form fields as needed
+    }
+  }, [isOpen]);
+
+  const handleSubmitWithImage = () => {
+    if (!name.trim()) return;
+
+    // Validate formulas
+    if (materialFormulaTokens.length > 0) {
+      const materialValidation = validateFormulaTokens(materialFormulaTokens);
+      if (!materialValidation.isValid) {
+        setMaterialFormulaError(materialValidation.error);
+        return;
+      }
+    }
+
+    if (laborFormulaTokens.length > 0) {
+      const laborValidation = validateFormulaTokens(laborFormulaTokens);
+      if (!laborValidation.isValid) {
+        setLaborFormulaError(laborValidation.error);
+        return;
+      }
+    }
+
+    const materialFormula = tokensToFormulaString(materialFormulaTokens);
+    const laborFormula = tokensToFormulaString(laborFormulaTokens);
+
+    // Clear localStorage before submitting
+    clearFormulaStorage();
+
+    onSubmit({
+      name: name.trim(),
+      description: description.trim(),
+      image,
+      materialFormula,
+      laborFormula,
+      markup
+    });
+  };
+
+  const handleCancel = () => {
+    // Clear all form data when cancelled
+    setImage("");
+    setName("");
+    setDescription("");
+    clearFormulaStorage();
+    onOpenChange(false);
+  };
+
+  // Enhanced dialog close handler
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      // Clear all form data when dialog is closed
+      setImage("");
+      setName("");
+      setDescription("");
+      clearFormulaStorage();
+
+      // Reset errors and validation state
+      setMaterialFormulaError(null);
+      setLaborFormulaError(null);
+      setElementErrors({ name: "" });
+      setElementTouched({ name: false });
+    }
+    onOpenChange(open);
+  };
+
   // Clear all form data when dialog closes
   useEffect(() => {
     if (!isOpen) {
@@ -697,14 +793,10 @@ export function ElementDialog({
   }, [isOpen, initialMarkup, setMaterialFormulaTokens, setLaborFormulaTokens]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!open) {
-        // Clear storage when dialog is manually closed
-        clearFormulaStorage();
-      }
-      onOpenChange(open);
-    }}>
-      <DialogContent className={`${calculateDialogWidth} max-h-[90vh] overflow-y-auto`}>
+    <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className={`${calculateDialogWidth} max-h-[90vh] overflow-y-auto`}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <BracesIcon className="mr-2 h-4 w-4" />
