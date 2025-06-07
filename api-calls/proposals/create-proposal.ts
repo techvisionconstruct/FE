@@ -1,5 +1,3 @@
-
-
 import { ProposalCreateRequest } from "@/types/proposals/dto";
 import Cookies from "js-cookie";
 
@@ -20,7 +18,13 @@ export async function createProposal(proposal: ProposalCreateRequest) {
     if (proposal.client_email) payload.client_email = proposal.client_email;
     if (proposal.client_phone) payload.client_phone = proposal.client_phone;    if (proposal.client_address)
       payload.client_address = proposal.client_address;
-    if (proposal.valid_until) payload.valid_until = proposal.valid_until;
+    if (proposal.valid_until) {
+      const date = new Date(proposal.valid_until);
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      payload.valid_until = `${yyyy}-${mm}-${dd}`;
+    }
     if (proposal.project_location) payload.project_location = proposal.project_location;
 
 
